@@ -122,11 +122,12 @@ canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;bord
 <div id="editorModal" class="modal">
 <div class="modalBox">
 <h2>🎨 나만의 맵 만들기</h2>
-<p class="editorHint">캔버스를 클릭해서 장애물을 배치하세요. 벽/원형 못/통로(기둥) 중 선택할 수 있고, "선택/회전" 도구로 기존 장애물을 골라 회전하거나 길이를 조정할 수 있어요. 맨 아래 빨간 점선이 결승선입니다.</p>
+<p class="editorHint">캔버스를 클릭해서 장애물을 배치하세요. 벽/원형 못/통로(기둥)/🔥마그마(닿으면 즉시 아웃) 중 선택할 수 있고, "선택/회전" 도구로 기존 장애물을 골라 회전하거나 길이를 조정할 수 있어요. 맨 아래 빨간 점선이 결승선입니다.</p>
 <div class="editorTools">
 <button id="wallTool" class="selected" onclick="setEditorTool('wall',this)">▭ 벽 추가</button>
 <button onclick="setEditorTool('circle',this)">⚪ 원형 못</button>
 <button onclick="setEditorTool('gate',this)">🚪 통로</button>
+<button onclick="setEditorTool('magma',this)">🔥 마그마</button>
 <button onclick="setEditorTool('select',this)">✥ 선택/회전</button>
 <button onclick="setEditorTool('erase',this)">지우기</button>
 <button onclick="clearEditor()">전체 지우기</button>
@@ -162,7 +163,7 @@ const CANVAS_W=canvas.width, CANVAS_H=canvas.height;
 const LEFT_IN=58, RIGHT_IN=CANVAS_W-58;
 const FINISH_Y=CANVAS_H-50;
 
-let currentMap="classic",balls=[],running=false,last=0,editorTool="wall",editorWalls=[],selectedIndex=-1;
+let currentMap="classic",balls=[],running=false,last=0,editorTool="wall",editorWalls=[],selectedIndex=-1,explosions=[],startCount=0;
 let customMaps=JSON.parse(localStorage.getItem("formwheel_marble_maps")||"{}");
 
 function sideWalls(){
@@ -176,15 +177,23 @@ function genClassic(){
  while(rowY<CANVAS_H-130){
    let offset=(row%2===0)?0:80;
    let useCircle=row%3===2;
-   for(let x=70+offset;x<CANVAS_W-70;x+=160){
-     if(useCircle) walls.push({type:'circle',x:x+27,y:rowY+7,r:16});
-     else walls.push({type:'rect',x,y:rowY,w:54,h:14});
-   }
+   let useMagma=row%6===4;
+   let cols=[];
+   for(let x=70+offset;x<CANVAS_W-70;x+=160) cols.push(x);
+   cols.forEach((x,ci)=>{
+     if(useMagma && ci===Math.floor(cols.length/2)){
+       walls.push({type:'magma',x,y:rowY,w:50,h:16});
+     } else if(useCircle){
+       walls.push({type:'circle',x:x+27,y:rowY+7,r:16});
+     } else {
+       walls.push({type:'rect',x,y:rowY,w:54,h:14});
+     }
+   });
    rowY+=gap;row++;
  }
  return walls;
 }
-// 좌우로 번갈아 막힌 통로를 만들어 S자로 굽이치는 미로 + 통로 중간에 원형 못을 섞어 변화를 줌
+// 좌우로 번갈아 막힌 통로를 만들어 S자로 굽이치는 미로 + 원형 못과 마그마를 섞어 변화를 줌 (마그마는 통로 한쪽에만 두어 피할 길을 남김)
 function genMaze(){
  let walls=sideWalls();
  let y=150,dir=1,gapW=190,row=0;
@@ -193,13 +202,14 @@ function genMaze(){
    else walls.push({type:'rect',x:LEFT_IN+gapW,y,w:(RIGHT_IN-LEFT_IN)-gapW,h:16});
    if(row%2===1){
      let cx=dir===1?(RIGHT_IN-gapW/2):(LEFT_IN+gapW/2);
-     walls.push({type:'circle',x:cx,y:y+55,r:14});
+     if(row%8===7) walls.push({type:'magma',x:cx-25,y:y+42,w:50,h:18});
+     else walls.push({type:'circle',x:cx,y:y+55,r:14});
    }
    y+=100;dir*=-1;row++;
  }
  return walls;
 }
-// 사각형, 원형, 기울어진 램프, 좁은 통로(기둥)까지 뒤섞은 혼돈 맵 - 완전히 막히지 않도록 한 줄에 1~2개로 제한
+// 사각형, 원형, 기울어진 램프, 좁은 통로(기둥), 마그마까지 뒤섞은 혼돈 맵 - 완전히 막히지 않도록 한 줄에 1~2개로 제한
 function genChaos(){
  let walls=sideWalls();
  let y=150;
@@ -207,15 +217,19 @@ function genChaos(){
    let n=1+Math.floor(Math.random()*2);
    for(let i=0;i<n;i++){
      let kind=Math.random();
-     if(kind<0.15){
+     if(kind<0.08){
+       let w=45+Math.random()*45;
+       let x=LEFT_IN+10+Math.random()*((RIGHT_IN-LEFT_IN-20)-w);
+       walls.push({type:'magma',x,y,w,h:16});
+     } else if(kind<0.20){
        let gap=46+Math.random()*30;
        let cx=LEFT_IN+40+Math.random()*((RIGHT_IN-LEFT_IN-80)-gap);
        walls.push({type:'rect',x:cx,y,w:14,h:70});
        walls.push({type:'rect',x:cx+14+gap,y,w:14,h:70});
-     } else if(kind<0.45){
+     } else if(kind<0.50){
        let x=LEFT_IN+10+Math.random()*(RIGHT_IN-LEFT_IN-20);
        walls.push({type:'circle',x,y:y+7,r:14+Math.random()*8});
-     } else if(kind<0.72){
+     } else if(kind<0.75){
        let w=45+Math.random()*55;
        let x=LEFT_IN+10+Math.random()*((RIGHT_IN-LEFT_IN-20)-w);
        let angle=(Math.random()*40-20)*Math.PI/180;
@@ -268,6 +282,26 @@ function drawObstacle(context,o){
    context.beginPath();context.arc(o.x,o.y,o.r,0,Math.PI*2);context.fill();
    return;
  }
+ if(o.type==='magma'){
+   context.save();
+   let grad=context.createLinearGradient(o.x,o.y,o.x,o.y+o.h);
+   grad.addColorStop(0,'#ffb23d');grad.addColorStop(1,'#c81d1d');
+   context.fillStyle=grad;
+   context.fillRect(o.x,o.y,o.w,o.h);
+   context.fillStyle='#ff8a3d';
+   let spikes=Math.max(2,Math.round(o.w/16));
+   context.beginPath();
+   context.moveTo(o.x,o.y);
+   for(let i=0;i<=spikes;i++){
+     let sx=o.x+(o.w/spikes)*i;
+     let sy=o.y-(i%2===0?4:9);
+     context.lineTo(sx,sy);
+   }
+   context.lineTo(o.x+o.w,o.y);
+   context.closePath();context.fill();
+   context.restore();
+   return;
+ }
  let angle=o.angle||0;
  if(!angle){context.fillRect(o.x,o.y,o.w,o.h);return}
  let cx=o.x+o.w/2, cy=o.y+o.h/2;
@@ -291,6 +325,13 @@ function draw(){
    ctx.fillText("MARBLE READY",canvas.width/2,70);
  }
  for(const b of balls) drawBall(b);
+ explosions.forEach(e=>{
+   let t=e.life/e.maxLife;
+   ctx.beginPath();
+   ctx.arc(e.x,e.y,(1-t)*24+6,0,Math.PI*2);
+   ctx.fillStyle=`rgba(255,120,20,${t})`;
+   ctx.fill();
+ });
 }
 function drawBall(b){
  ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fillStyle=b.color;ctx.fill();
@@ -310,10 +351,28 @@ function startGame(){
  let people=parseNames();
  if(!people.length){alert("참가자를 먼저 입력해주세요.");return}
  balls=people.map((p,i)=>makeBall(p,i,people.length));
+ startCount=balls.length;
+ explosions=[];
  document.getElementById("result").classList.remove("show");
  running=true;last=performance.now();requestAnimationFrame(loop);
 }
-function resetGame(){running=false;balls=[];document.getElementById("result").classList.remove("show");draw();parseNames()}
+function resetGame(){running=false;balls=[];explosions=[];document.getElementById("result").classList.remove("show");draw();parseNames()}
+function hitsMagma(b,o){
+ let angle=o.angle||0;
+ if(!angle){
+   let nx=Math.max(o.x,Math.min(b.x,o.x+o.w)), ny=Math.max(o.y,Math.min(b.y,o.y+o.h));
+   let dx=b.x-nx, dy=b.y-ny;
+   return dx*dx+dy*dy<b.r*b.r;
+ }
+ let cx=o.x+o.w/2, cy=o.y+o.h/2;
+ let cos=Math.cos(-angle), sin=Math.sin(-angle);
+ let dx=b.x-cx, dy=b.y-cy;
+ let lx=dx*cos-dy*sin, ly=dx*sin+dy*cos;
+ let hw=o.w/2, hh=o.h/2;
+ let clx=Math.max(-hw,Math.min(lx,hw)), cly=Math.max(-hh,Math.min(ly,hh));
+ let ddx=lx-clx, ddy=ly-cly;
+ return ddx*ddx+ddy*ddy<b.r*b.r;
+}
 function loop(t){
  if(!running)return;
  let dt=Math.min(2,(t-last)/16.67);last=t;
@@ -322,10 +381,22 @@ function loop(t){
    if(b.x<LEFT_IN+b.r){b.x=LEFT_IN+b.r;b.vx=Math.abs(b.vx)*.9}
    if(b.x>RIGHT_IN-b.r){b.x=RIGHT_IN-b.r;b.vx=-Math.abs(b.vx)*.9}
    if(b.y<b.r){b.y=b.r;b.vy=Math.abs(b.vy)*.9}
-   for(const w of walls()) collideObstacle(b,w);
+   for(const w of walls()){
+     if(w.type==='magma'){ if(hitsMagma(b,w)) b.dead=true; }
+     else collideObstacle(b,w);
+   }
  }
+ let died=balls.filter(b=>b.dead);
+ if(died.length){
+   died.forEach(b=>explosions.push({x:b.x,y:b.y,life:20,maxLife:20}));
+   balls=balls.filter(b=>!b.dead);
+ }
+ explosions.forEach(e=>e.life--);
+ explosions=explosions.filter(e=>e.life>0);
  for(let i=0;i<balls.length;i++)for(let j=i+1;j<balls.length;j++)ballCollision(balls[i],balls[j]);
  for(const b of balls){if(Math.abs(b.vx)+Math.abs(b.vy)<.35){b.vx+=(Math.random()-.5)*.6;b.vy+=.7}}
+ if(balls.length===0){ finishGame(null); return; }
+ if(balls.length===1 && startCount>1){ finishGame(balls[0]); return; }
  // 결승선에 도달한 구슬이 있으면 즉시 종료 (실제로 가장 먼저 결승선에 닿은 구슬이 우승)
  let arrived=balls.filter(b=>b.y+b.r>=FINISH_Y);
  if(arrived.length){
@@ -381,7 +452,7 @@ function ballCollision(a,b){
  if(d&&d<min){let nx=dx/d,ny=dy/d,over=min-d;a.x-=nx*over/2;a.y-=ny*over/2;b.x+=nx*over/2;b.y+=ny*over/2;let rvx=b.vx-a.vx,rvy=b.vy-a.vy,p=rvx*nx+rvy*ny;if(p<0){a.vx+=p*nx;a.vy+=p*ny;b.vx-=p*nx;b.vy-=p*ny}}}
 function finishGame(winner){
  running=false;
- document.getElementById("winner").textContent=winner.name;
+ document.getElementById("winner").textContent=winner?winner.name:"생존자 없음 (전원 아웃)";
  document.getElementById("result").classList.add("show");
  draw();
 }
@@ -399,6 +470,7 @@ function toolHint(){
  if(editorTool==='wall') return "클릭해서 벽을 추가하세요";
  if(editorTool==='circle') return "클릭해서 원형 못을 추가하세요";
  if(editorTool==='gate') return "클릭해서 통로(기둥 두 개)를 추가하세요";
+ if(editorTool==='magma') return "클릭해서 마그마를 추가하세요 (닿으면 즉시 아웃)";
  if(editorTool==='erase') return "클릭해서 삭제하세요";
  if(editorTool==='select') return "장애물을 클릭해 선택 후 회전/길이를 조정하세요";
  return "";
@@ -476,6 +548,8 @@ ecanvas.addEventListener("click",e=>{
    let cx=Math.round(x/10)*10, cy=Math.round(y/10)*10, gap=60;
    editorWalls.push({type:'rect',x:cx-gap/2-14,y:cy-50,w:14,h:100,angle:0});
    editorWalls.push({type:'rect',x:cx+gap/2,y:cy-50,w:14,h:100,angle:0});
+ } else if(editorTool==="magma"){
+   editorWalls.push({type:'magma',x:Math.round(x/10)*10-40,y:Math.round(y/10)*10-9,w:80,h:18,angle:0});
  } else if(editorTool==="select"){
    let idx=-1;
    for(let i=editorWalls.length-1;i>=0;i--){if(hitTest(editorWalls[i],x,y)){idx=i;break}}
