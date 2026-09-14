@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f7f8fc">
+<title>FormWheel Marble</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f7f8fc;color:#17181c}
+body{padding-bottom:40px}
+header{position:sticky;top:0;z-index:20;height:64px;background:rgba(255,255,255,.88);backdrop-filter:blur(14px);border-bottom:1px solid #e8e9ee;display:flex;align-items:center;padding:0 22px}
+.logo{font-weight:900;font-size:23px;letter-spacing:-1px;text-decoration:none;color:#17181c;display:flex;align-items:center;gap:7px}
+.logoWheel{width:25px;height:25px;border-radius:50%;border:4px dotted #17181c;display:inline-block}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 18px}
+.hero{text-align:center;margin:12px 0 26px}
+.hero h1{font-size:38px;margin:0 0 8px;letter-spacing:-1.5px}
+.hero p{margin:0;color:#747780}
+.grid{display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start}
+.card{background:#fff;border:1px solid #e5e7ed;border-radius:20px;padding:20px;box-shadow:0 8px 28px rgba(30,35,50,.05)}
+.card h2{font-size:17px;margin:0 0 13px}
+textarea{width:100%;min-height:190px;border:1px solid #dfe2e8;border-radius:14px;padding:13px;resize:vertical;outline:none;font-size:15px;line-height:1.65}
+textarea:focus,input:focus{border-color:#7b61ff;box-shadow:0 0 0 3px rgba(123,97,255,.1)}
+.help{font-size:12px;color:#858994;margin-top:9px;line-height:1.5}
+.row{display:flex;gap:9px;flex-wrap:wrap}
+button,select,input{font:inherit}
+button{border:0;border-radius:12px;padding:11px 15px;font-weight:750;cursor:pointer;background:#eef0f5;color:#20232a}
+button:hover{filter:brightness(.97)}
+.primary{background:#17181c;color:#fff}
+.danger{background:#fff0f0;color:#d33}
+.mapBtns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.mapBtn{padding:12px 7px;border:1px solid #e1e3e9;background:#fafbfc}
+.mapBtn.active{border-color:#17181c;background:#17181c;color:#fff}
+canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;border-radius:18px}
+.stage{position:relative}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.result{display:none;background:rgba(255,255,255,.96);border:1px solid #ddd;border-radius:20px;padding:22px 30px;text-align:center;box-shadow:0 15px 50px rgba(0,0,0,.12)}
+.result.show{display:block}
+.result .winner{font-size:30px;font-weight:900;margin-top:4px}
+.stats{display:flex;gap:8px;margin-top:12px}
+.stat{flex:1;background:#f6f7f9;border-radius:12px;padding:10px;text-align:center;font-size:12px;color:#777}
+.stat b{display:block;color:#17181c;font-size:18px;margin-bottom:2px}
+.editor{margin-top:18px}
+.editorTools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.editorTools button.selected{background:#17181c;color:#fff}
+.editorHint{font-size:12px;color:#777;margin:0 0 10px}
+.modal{display:none;position:fixed;inset:0;background:rgba(10,12,18,.4);z-index:50;align-items:center;justify-content:center;padding:18px}
+.modal.show{display:flex}
+.modalBox{width:min(520px,100%);background:#fff;border-radius:22px;padding:22px}
+.modalBox h2{margin:0 0 14px}
+.modalBox input{width:100%;padding:12px;border:1px solid #ddd;border-radius:11px}
+.saved{display:grid;gap:8px;margin-top:12px}
+.savedItem{display:flex;justify-content:space-between;align-items:center;background:#f7f8fa;padding:10px 12px;border-radius:11px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.hero h1{font-size:31px}.mapBtns{grid-template-columns:1fr}.card{border-radius:17px}}
+</style>
+</head>
+<body>
+<header>
+<a class="logo" href="https://semicolonxss.github.io/Formwheel/">Form<span class="logoWheel"></span>Wheel</a>
+</header>
+
+<main class="wrap">
+<section class="hero">
+<h1>🎱 FormWheel Marble</h1>
+<p>구슬들이 맵을 달리고, 마지막까지 남은 구슬을 뽑아보세요.</p>
+</section>
+
+<div class="grid">
+<section>
+<div class="card">
+<h2>참가자</h2>
+<textarea id="names" placeholder="[기생충-3], [전랑], [어벤져스-5]"></textarea>
+<div class="help">대괄호로 구분하세요. <b>[이름-숫자]</b>는 해당 구슬을 숫자만큼 생성하고, 숫자가 없으면 1개입니다.</div>
+<div class="row" style="margin-top:12px">
+<button onclick="sample()">예시 입력</button>
+<button class="danger" onclick="clearNames()">지우기</button>
+</div>
+</div>
+
+<div class="card" style="margin-top:18px">
+<h2>맵 선택</h2>
+<div class="mapBtns">
+<button class="mapBtn active" data-map="classic">Classic</button>
+<button class="mapBtn" data-map="maze">Maze</button>
+<button class="mapBtn" data-map="chaos">Chaos</button>
+</div>
+<div class="row" style="margin-top:10px">
+<button onclick="openEditor()">🎨 맵 만들기</button>
+<button onclick="openSaved()">📁 저장 맵</button>
+</div>
+</div>
+
+<div class="card" style="margin-top:18px">
+<h2>게임 설정</h2>
+<div class="row">
+<label style="display:flex;align-items:center;gap:8px"><input id="labels" type="checkbox" checked> 구슬 이름 표시</label>
+<label style="display:flex;align-items:center;gap:8px"><input id="sound" type="checkbox" checked> 효과음</label>
+</div>
+<div class="row" style="margin-top:14px">
+<button class="primary" style="flex:1" onclick="startGame()">▶ MARBLE START</button>
+<button onclick="resetGame()">↻ 초기화</button>
+</div>
+<div class="stats">
+<div class="stat"><b id="count">0</b>구슬</div>
+<div class="stat"><b id="mapName">Classic</b>맵</div>
+</div>
+</div>
+</section>
+
+<section class="card">
+<div class="stage">
+<canvas id="game" width="760" height="620"></canvas>
+<div class="overlay"><div id="result" class="result"><div>🏆 WINNER</div><div id="winner" class="winner"></div><button style="margin-top:13px" onclick="startGame()">다시 뽑기</button></div></div>
+</div>
+</section>
+</div>
+</main>
+
+<div id="editorModal" class="modal">
+<div class="modalBox">
+<h2>🎨 나만의 맵 만들기</h2>
+<p class="editorHint">캔버스를 클릭해서 벽을 배치하세요. 지우개로 삭제할 수 있습니다.</p>
+<div class="editorTools">
+<button id="wallTool" class="selected" onclick="editorTool='wall';selectTool(this)">벽 추가</button>
+<button onclick="editorTool='erase';selectTool(this)">지우기</button>
+<button onclick="clearEditor()">전체 지우기</button>
+</div>
+<canvas id="editor" width="760" height="500"></canvas>
+<div class="row" style="margin-top:12px">
+<input id="mapTitle" placeholder="맵 이름" style="flex:1;min-width:180px">
+<button class="primary" onclick="saveCustomMap()">저장</button>
+<button onclick="closeEditor()">닫기</button>
+</div>
+</div>
+</div>
+
+<div id="savedModal" class="modal">
+<div class="modalBox">
+<h2>📁 저장한 맵</h2>
+<div id="savedList" class="saved"></div>
+<div class="row" style="margin-top:14px"><button onclick="closeSaved()">닫기</button></div>
+</div>
+</div>
+
+<script>
+const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
+const ecanvas=document.getElementById("editor"),ectx=ecanvas.getContext("2d");
+let currentMap="classic",balls=[],running=false,last=0,editorTool="wall",editorWalls=[];
+let customMaps=JSON.parse(localStorage.getItem("formwheel_marble_maps")||"{}");
+
+const baseMaps={
+classic:[
+{x:120,y:170,w:520,h:18},{x:120,y:430,w:520,h:18},
+{x:190,y:170,w:18,h:120},{x:552,y:320,w:18,h:128},
+{x:300,y:280,w:160,h:16},{x:300,y:350,w:160,h:16}
+],
+maze:[
+{x:90,y:120,w:580,h:18},{x:90,y:482,w:580,h:18},{x:90,y:120,w:18,h:380},{x:652,y:120,w:18,h:380},
+{x:210,y:120,w:18,h:180},{x:210,y:300,w:220,h:18},{x:430,y:300,w:18,h:200},
+{x:330,y:200,w:190,h:18},{x:330,y:200,w:18,h:100},{x:520,y:120,w:18,h:98}
+],
+chaos:[
+{x:80,y:110,w:600,h:18},{x:80,y:492,w:600,h:18},
+{x:80,y:110,w:18,h:400},{x:662,y:110,w:18,h:400},
+{x:180,y:180,w:140,h:16},{x:440,y:180,w:140,h:16},
+{x:270,y:250,w:220,h:16},{x:150,y:350,w:170,h:16},{x:440,y:350,w:170,h:16},
+{x:350,y:410,w:70,h:16}
+]};
+
+function parseNames(){
+ let text=document.getElementById("names").value;
+ let arr=[], re=/\[([^\]\n]+)\]/g,m;
+ while((m=re.exec(text))){
+   let raw=m[1].trim(), parts=raw.match(/^(.*?)-(\d+)$/), name=raw, n=1;
+   if(parts){name=parts[1].trim();n=Math.max(1,Math.min(100,parseInt(parts[2])))}
+   if(name) for(let i=0;i<n;i++) arr.push({name,id:crypto.randomUUID()});
+ }
+ document.getElementById("count").textContent=arr.length;
+ return arr;
+}
+function sample(){document.getElementById("names").value="[기생충-3], [전랑], [어벤져스-5], [타이타닉-2]";parseNames()}
+function clearNames(){document.getElementById("names").value="";parseNames()}
+document.getElementById("names").addEventListener("input",parseNames);
+
+document.querySelectorAll(".mapBtn").forEach(b=>b.onclick=()=>{
+ document.querySelectorAll(".mapBtn").forEach(x=>x.classList.remove("active"));
+ b.classList.add("active");currentMap=b.dataset.map;document.getElementById("mapName").textContent=b.textContent;draw();
+});
+
+function walls(){
+ if(currentMap.startsWith("custom:")) return customMaps[currentMap.slice(7)]||[];
+ return baseMaps[currentMap]||baseMaps.classic;
+}
+function draw(){
+ ctx.clearRect(0,0,canvas.width,canvas.height);
+ ctx.fillStyle="#fafafa";ctx.fillRect(0,0,canvas.width,canvas.height);
+ ctx.fillStyle="#e8e9ed";
+ for(const w of walls()){ctx.fillRect(w.x,w.y,w.w,w.h)}
+ if(!running){
+   ctx.fillStyle="#9b9da4";ctx.font="600 18px sans-serif";ctx.textAlign="center";
+   ctx.fillText("MARBLE READY",canvas.width/2,70);
+ }
+ for(const b of balls) drawBall(b);
+}
+function drawBall(b){
+ ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fillStyle=b.color;ctx.fill();
+ ctx.strokeStyle="rgba(0,0,0,.15)";ctx.stroke();
+ if(document.getElementById("labels").checked){
+   ctx.fillStyle="#333";ctx.font="11px sans-serif";ctx.textAlign="center";
+   ctx.fillText(b.name,b.x,b.y-b.r-5);
+ }
+}
+function makeBall(p,i,total){
+ let angle=Math.random()*Math.PI*2,s=.8+Math.random()*1.4;
+ return {name:p.name,x:100+Math.random()*560,y:75+Math.random()*35,r:Math.max(6,Math.min(11,8+Math.random()*3)),
+ vx:Math.cos(angle)*s,vy:Math.sin(angle)*s+1,color:`hsl(${(i*360/Math.max(total,1)+Math.random()*25)%360} 70% 55%)`,alive:true};
+}
+function startGame(){
+ let people=parseNames();
+ if(!people.length){alert("참가자를 먼저 입력해주세요.");return}
+ balls=people.map((p,i)=>makeBall(p,i,people.length));
+ document.getElementById("result").classList.remove("show");
+ running=true;last=performance.now();requestAnimationFrame(loop);
+}
+function resetGame(){running=false;balls=[];document.getElementById("result").classList.remove("show");draw();parseNames()}
+function loop(t){
+ if(!running)return;
+ let dt=Math.min(2,(t-last)/16.67);last=t;
+ for(const b of balls){
+   b.vy+=.035*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;
+   if(b.x<b.r){b.x=b.r;b.vx=Math.abs(b.vx)*.92}
+   if(b.x>canvas.width-b.r){b.x=canvas.width-b.r;b.vx=-Math.abs(b.vx)*.92}
+   if(b.y<b.r){b.y=b.r;b.vy=Math.abs(b.vy)*.9}
+   if(b.y>canvas.height-b.r){b.y=canvas.height-b.r;b.vy=-Math.abs(b.vy)*.82}
+   for(const w of walls()) collide(b,w);
+ }
+ // 공끼리 충돌
+ for(let i=0;i<balls.length;i++)for(let j=i+1;j<balls.length;j++)ballCollision(balls[i],balls[j]);
+ // 아주 오래 멈추지 않게 약한 랜덤 힘
+ for(const b of balls){if(Math.abs(b.vx)+Math.abs(b.vy)<.35){b.vx+=(Math.random()-.5)*.5;b.vy-=.5}}
+ draw();
+ // 일정 시간이 지나면 가장 아래쪽/가장 안정적으로 남은 공을 당첨
+ if(t-gameStartTime>7000 && balls.length){
+   finishGame();
+ }else requestAnimationFrame(loop);
+}
+let gameStartTime=0;
+const oldStart=startGame;
+startGame=function(){
+ let people=parseNames();
+ if(!people.length){alert("참가자를 먼저 입력해주세요.");return}
+ balls=people.map((p,i)=>makeBall(p,i,people.length));
+ document.getElementById("result").classList.remove("show");
+ running=true;gameStartTime=performance.now();last=gameStartTime;requestAnimationFrame(loop);
+};
+function collide(b,w){
+ let nx=Math.max(w.x,Math.min(b.x,w.x+w.w)),ny=Math.max(w.y,Math.min(b.y,w.y+w.h));
+ let dx=b.x-nx,dy=b.y-ny,d=dx*dx+dy*dy;
+ if(d<b.r*b.r){
+   if(Math.abs(dx)>Math.abs(dy)){b.vx=-b.vx*.86;b.x+=dx>0?b.r-dx:-(b.r+dx)}
+   else{b.vy=-b.vy*.84;b.y+=dy>0?b.r-dy:-(b.r+dy)}
+ }
+}
+function ballCollision(a,b){
+ let dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy),min=a.r+b.r;
+ if(d&&d<min){let nx=dx/d,ny=dy/d,over=min-d;a.x-=nx*over/2;a.y-=ny*over/2;b.x+=nx*over/2;b.y+=ny*over/2;let rvx=b.vx-a.vx,rvy=b.vy-a.vy,p=rvx*nx+rvy*ny;if(p<0){a.vx+=p*nx;a.vy+=p*ny;b.vx-=p*nx;b.vy-=p*ny}}}
+function finishGame(){
+ running=false;
+ let winner=balls[Math.floor(Math.random()*balls.length)];
+ document.getElementById("winner").textContent=winner.name;
+ document.getElementById("result").classList.add("show");
+ draw();
+}
+function openEditor(){editorWalls=JSON.parse(JSON.stringify(walls().slice(0,50)));document.getElementById("mapTitle").value="";drawEditor();document.getElementById("editorModal").classList.add("show")}
+function closeEditor(){document.getElementById("editorModal").classList.remove("show")}
+function selectTool(el){document.querySelectorAll(".editorTools button").forEach(x=>x.classList.remove("selected"));el.classList.add("selected")}
+function drawEditor(){
+ ectx.clearRect(0,0,ecanvas.width,ecanvas.height);ectx.fillStyle="#fafafa";ectx.fillRect(0,0,ecanvas.width,ecanvas.height);
+ ectx.fillStyle="#e8e9ed";editorWalls.forEach(w=>ectx.fillRect(w.x,w.y,w.w,w.h));
+ ectx.fillStyle="#bbb";ectx.font="13px sans-serif";ectx.textAlign="center";ectx.fillText("클릭해서 벽을 추가하세요",380,35);
+}
+ecanvas.addEventListener("click",e=>{
+ let r=ecanvas.getBoundingClientRect(),x=(e.clientX-r.left)*ecanvas.width/r.width,y=(e.clientY-r.top)*ecanvas.height/r.height;
+ if(editorTool==="erase"){editorWalls=editorWalls.filter(w=>!(x>=w.x&&x<=w.x+w.w&&y>=w.y&&y<=w.y+w.h))}
+ else editorWalls.push({x:Math.round(x/10)*10-40,y:Math.round(y/10)*10-8,w:80,h:16});
+ drawEditor();
+});
+function clearEditor(){editorWalls=[];drawEditor()}
+function saveCustomMap(){
+ let name=document.getElementById("mapTitle").value.trim()||"내 맵";
+ customMaps[name]=editorWalls;localStorage.setItem("formwheel_marble_maps",JSON.stringify(customMaps));
+ closeEditor();currentMap="custom:"+name;document.getElementById("mapName").textContent=name;
+ document.querySelectorAll(".mapBtn").forEach(x=>x.classList.remove("active"));draw();
+}
+function openSaved(){
+ let box=document.getElementById("savedList");box.innerHTML="";
+ let keys=Object.keys(customMaps);
+ if(!keys.length)box.innerHTML="<div style='color:#777'>저장된 맵이 없습니다.</div>";
+ keys.forEach(k=>{
+  let div=document.createElement("div");div.className="savedItem";
+  div.innerHTML=`<span>${escapeHtml(k)}</span>`;
+  let row=document.createElement("span");
+  let use=document.createElement("button");use.textContent="사용";use.onclick=()=>{currentMap="custom:"+k;document.getElementById("mapName").textContent=k;closeSaved();draw()};
+  let del=document.createElement("button");del.textContent="삭제";del.className="danger";del.onclick=()=>{delete customMaps[k];localStorage.setItem("formwheel_marble_maps",JSON.stringify(customMaps));openSaved()};
+  row.append(use,del);div.append(row);box.append(div);
+ });
+ document.getElementById("savedModal").classList.add("show");
+}
+function closeSaved(){document.getElementById("savedModal").classList.remove("show")}
+function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+draw();parseNames();
+</script>
+</body>
+</html>
