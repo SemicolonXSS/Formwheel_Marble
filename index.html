@@ -34,7 +34,7 @@ button:hover{filter:brightness(.97)}
 canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;border-radius:18px}
 .stage{position:relative}
 .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
-.result{display:none;background:rgba(255,255,255,.96);border:1px solid #ddd;border-radius:20px;padding:22px 30px;text-align:center;box-shadow:0 15px 50px rgba(0,0,0,.12)}
+.result{display:none;pointer-events:auto;background:rgba(255,255,255,.96);border:1px solid #ddd;border-radius:20px;padding:22px 30px;text-align:center;box-shadow:0 15px 50px rgba(0,0,0,.12)}
 .result.show{display:block}
 .result .winner{font-size:30px;font-weight:900;margin-top:4px}
 .stats{display:flex;gap:8px;margin-top:12px}
@@ -157,42 +157,42 @@ function sideWalls(){
  return [{x:40,y:90,w:18,h:CANVAS_H-140},{x:CANVAS_W-58,y:90,w:18,h:CANVAS_H-140}];
 }
 
-// 위에서 아래까지 지그재그로 어긋난 못(peg)들을 촘촘히 배치 - 클래식 플린코 스타일
+// 위에서 아래까지 지그재그로 어긋난 못(peg)들을 배치 - 사이 간격을 넉넉히 두어 구슬이 반드시 빠져나갈 수 있게 함
 function genClassic(){
  let walls=sideWalls();
- let rowY=140,gap=66,row=0;
+ let rowY=140,gap=82,row=0;
  while(rowY<CANVAS_H-130){
-   let offset=(row%2===0)?0:65;
-   for(let x=70+offset;x<CANVAS_W-70;x+=130){
-     walls.push({x,y:rowY,w:72,h:15});
+   let offset=(row%2===0)?0:80;
+   for(let x=70+offset;x<CANVAS_W-70;x+=160){
+     walls.push({x,y:rowY,w:54,h:14});
    }
    rowY+=gap;row++;
  }
  return walls;
 }
-// 좌우로 번갈아 막힌 통로를 만들어 S자로 굽이치는 미로
+// 좌우로 번갈아 막힌 통로를 만들어 S자로 굽이치는 미로 (통로 폭을 넓혀 막힘 없이 끝까지 이어짐)
 function genMaze(){
  let walls=sideWalls();
- let y=150,dir=1,gapW=170;
+ let y=150,dir=1,gapW=190;
  while(y<CANVAS_H-150){
    if(dir===1) walls.push({x:LEFT_IN,y,w:(RIGHT_IN-LEFT_IN)-gapW,h:16});
    else walls.push({x:LEFT_IN+gapW,y,w:(RIGHT_IN-LEFT_IN)-gapW,h:16});
-   y+=95;dir*=-1;
+   y+=100;dir*=-1;
  }
  return walls;
 }
-// 크기와 위치가 들쭉날쭉한 장애물이 흩어진 혼돈 맵 (생성 시 한 번만 무작위 배치되어 이후 고정)
+// 크기와 위치가 들쭉날쭉한 장애물이 흩어진 혼돈 맵 - 한 줄에 장애물을 최대 1~2개로 제한해 완전히 막히지 않게 함
 function genChaos(){
  let walls=sideWalls();
  let y=150;
  while(y<CANVAS_H-150){
-   let n=2+Math.floor(Math.random()*2);
+   let n=1+Math.floor(Math.random()*2);
    for(let i=0;i<n;i++){
-     let w=60+Math.random()*70;
+     let w=45+Math.random()*55;
      let x=LEFT_IN+10+Math.random()*((RIGHT_IN-LEFT_IN-20)-w);
      walls.push({x,y,w,h:15});
    }
-   y+=55+Math.random()*35;
+   y+=75+Math.random()*40;
  }
  return walls;
 }
@@ -279,8 +279,8 @@ function loop(t){
    for(const w of walls()) collide(b,w);
  }
  for(let i=0;i<balls.length;i++)for(let j=i+1;j<balls.length;j++)ballCollision(balls[i],balls[j]);
- for(const b of balls){if(Math.abs(b.vx)+Math.abs(b.vy)<.35){b.vx+=(Math.random()-.5)*.5;b.vy+=.4}}
- // 결승선에 도달한 구슬이 있으면 즉시 종료 (가장 먼저/가장 깊이 도달한 구슬이 우승)
+ for(const b of balls){if(Math.abs(b.vx)+Math.abs(b.vy)<.35){b.vx+=(Math.random()-.5)*.6;b.vy+=.7}}
+ // 결승선에 도달한 구슬이 있으면 즉시 종료 (실제로 가장 먼저 결승선에 닿은 구슬이 우승)
  let arrived=balls.filter(b=>b.y+b.r>=FINISH_Y);
  if(arrived.length){
    let winner=arrived.reduce((a,c)=>c.y>a.y?c:a);
@@ -288,11 +288,6 @@ function loop(t){
    return;
  }
  draw();
- if(t-gameStartTime>20000){
-   let winner=balls.reduce((a,c)=>c.y>a.y?c:a);
-   finishGame(winner);
-   return;
- }
  requestAnimationFrame(loop);
 }
 function collide(b,w){
