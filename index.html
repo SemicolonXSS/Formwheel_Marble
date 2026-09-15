@@ -596,10 +596,21 @@ function openSaved(){
   div.innerHTML=`<span>${escapeHtml(k)}</span>`;
   let row=document.createElement("span");
   let use=document.createElement("button");use.textContent="사용";use.onclick=()=>{currentMap="custom:"+k;document.getElementById("mapName").textContent=k;closeSaved();draw()};
+  let edit=document.createElement("button");edit.textContent="수정";edit.onclick=()=>{editCustomMap(k)};
   let del=document.createElement("button");del.textContent="삭제";del.className="danger";del.onclick=()=>{delete customMaps[k];localStorage.setItem("formwheel_marble_maps",JSON.stringify(customMaps));openSaved()};
-  row.append(use,del);div.append(row);box.append(div);
+  row.append(use,edit,del);div.append(row);box.append(div);
  });
  document.getElementById("savedModal").classList.add("show");
+}
+function editCustomMap(name){
+ editorWalls=JSON.parse(JSON.stringify(customMaps[name]||[]));
+ selectedIndex=-1;updateSelPanel();
+ document.getElementById("finishRange").value=FINISH_Y;
+ document.getElementById("mapTitle").value=name;
+ setEditorTool('wall',document.getElementById("wallTool"));
+ closeSaved();
+ document.getElementById("editorModal").classList.add("show");
+ drawEditor();
 }
 function closeSaved(){document.getElementById("savedModal").classList.remove("show")}
 function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
