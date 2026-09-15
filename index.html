@@ -104,14 +104,6 @@ canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;bord
 <label style="display:flex;align-items:center;gap:8px"><input id="labels" type="checkbox" checked> 구슬 이름 표시</label>
 <label style="display:flex;align-items:center;gap:8px"><input id="sound" type="checkbox" checked> 효과음</label>
 </div>
-<div class="finishRow">
-<span>결승선 위치</span>
-<input id="finishRange" type="range" min="200" max="860" value="850" oninput="setFinishY(this.value)">
-</div>
-<div class="finishBtns">
-<button onclick="moveFinish(-20)">▲ 위로</button>
-<button onclick="moveFinish(20)">▼ 아래로</button>
-</div>
 <div class="row" style="margin-top:14px">
 <button class="primary" style="flex:1" onclick="startGame()">▶ MARBLE START</button>
 <button onclick="resetGame()">↻ 초기화</button>
@@ -146,6 +138,14 @@ canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;bord
 <button onclick="clearEditor()">전체 지우기</button>
 </div>
 <canvas id="editor" width="760" height="900"></canvas>
+<div class="finishRow">
+<span>결승선 위치</span>
+<input id="finishRange" type="range" min="200" max="860" value="850" oninput="setFinishY(this.value)">
+</div>
+<div class="finishBtns">
+<button onclick="moveFinish(-20)">▲ 위로</button>
+<button onclick="moveFinish(20)">▼ 아래로</button>
+</div>
 <div id="selPanel" class="selPanel row" style="margin-top:10px">
 <button onclick="rotateSel(-15)">↺ 회전</button>
 <button onclick="rotateSel(15)">↻ 회전</button>
@@ -500,6 +500,7 @@ function toolHint(){
 function openEditor(){
  editorWalls=JSON.parse(JSON.stringify(walls().slice(0,140)));
  selectedIndex=-1;updateSelPanel();
+ document.getElementById("finishRange").value=FINISH_Y;
  document.getElementById("mapTitle").value="";
  setEditorTool('wall',document.getElementById("wallTool"));
  document.getElementById("editorModal").classList.add("show");
