@@ -127,12 +127,16 @@ canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;bord
 <div id="editorModal" class="modal">
 <div class="modalBox">
 <h2>🎨 나만의 맵 만들기</h2>
-<p class="editorHint">캔버스를 클릭해서 장애물을 배치하세요. 벽/원형 못/통로(기둥)/🔥마그마(닿으면 즉시 아웃) 중 선택할 수 있고, "선택/회전" 도구로 기존 장애물을 골라 회전하거나 길이를 조정할 수 있어요. 맨 아래 빨간 점선이 결승선입니다.</p>
+<p class="editorHint">캔버스를 클릭해서 장애물을 배치하세요. 벽/원형 못/통로(기둥)/🔥마그마(닿으면 즉시 아웃)/🌪️깔때기(구슬을 좁은 출구로 모음)/🛹움직이는 발판(위에 탄 구슬을 함께 밀어줌)/🌀회전 바(부딪히면 튕겨나감)/🟢트램폴린(크게 튕겨오름) 중 선택할 수 있고, "선택/회전" 도구로 기존 장애물을 골라 회전하거나 길이를 조정할 수 있어요. 맨 아래 빨간 점선이 결승선입니다.</p>
 <div class="editorTools">
 <button id="wallTool" class="selected" onclick="setEditorTool('wall',this)">▭ 벽 추가</button>
 <button onclick="setEditorTool('circle',this)">⚪ 원형 못</button>
 <button onclick="setEditorTool('gate',this)">🚪 통로</button>
 <button onclick="setEditorTool('magma',this)">🔥 마그마</button>
+<button onclick="setEditorTool('funnel',this)">🌪️ 깔때기</button>
+<button onclick="setEditorTool('platform',this)">🛹 움직이는 발판</button>
+<button onclick="setEditorTool('spinner',this)">🌀 회전 바</button>
+<button onclick="setEditorTool('trampoline',this)">🟢 트램폴린</button>
 <button onclick="setEditorTool('select',this)">✥ 선택/회전</button>
 <button onclick="setEditorTool('erase',this)">지우기</button>
 <button onclick="clearEditor()">전체 지우기</button>
@@ -178,7 +182,9 @@ let FINISH_Y=CANVAS_H-50;
 const FINISH_MIN=100, FINISH_MAX=CANVAS_H-10;
 
 let currentMap="classic",balls=[],running=false,last=0,editorTool="wall",editorWalls=[],selectedIndex=-1,explosions=[],startCount=0;
-let customMaps=JSON.parse(localStorage.getItem("formwheel_marble_maps")||"{}");
+let customMaps={};
+try{ customMaps=JSON.parse(localStorage.getItem("formwheel_marble_maps")||"{}"); }catch(e){ customMaps={}; }
+function saveMapsToStorage(){ try{ localStorage.setItem("formwheel_marble_maps",JSON.stringify(customMaps)); }catch(e){} }
 
 function setFinishY(v){
  FINISH_Y=Math.max(FINISH_MIN,Math.min(FINISH_MAX,Math.round(Number(v))));
@@ -215,17 +221,27 @@ function genClassic(){
  }
  return walls;
 }
-// 좌우로 번갈아 막힌 통로를 만들어 S자로 굽이치는 미로 + 원형 못과 마그마를 섞어 변화를 줌 (마그마는 통로 한쪽에만 두어 피할 길을 남김)
+// 좌우로 번갈아 막힌 통로를 만들어 S자로 굽이치는 미로 + 원형 못을 섞어 변화를 줌.
+// 마그마는 미로 중간의 "관문" 한 곳에만, 통로 폭의 약 2/3를 막는 형태로 배치해서
+// 나머지 1/3의 좁은 안전 통로를 통과한 구슬만 생존하도록 설계 (대략 3명 중 1명꼴 생존)
 function genMaze(){
  let walls=sideWalls();
- let y=150,dir=1,gapW=190,row=0;
+ let y=150,dir=1,gapW=230,row=0;
+ let totalRows=Math.ceil((CANVAS_H-150-150)/100);
+ let gateRow=Math.round(totalRows*0.5); // 관문 위치: 미로 중간쯤
  while(y<CANVAS_H-150){
    if(dir===1) walls.push({type:'rect',x:LEFT_IN,y,w:(RIGHT_IN-LEFT_IN)-gapW,h:16});
    else walls.push({type:'rect',x:LEFT_IN+gapW,y,w:(RIGHT_IN-LEFT_IN)-gapW,h:16});
-   if(row%2===1){
+   let openStart=dir===1?(RIGHT_IN-gapW):LEFT_IN;
+   if(row===gateRow){
+     // 통로 폭(gapW)의 약 65%를 마그마가 막고, 벽 쪽에 약 35%의 안전한 틈만 남김
+     let safeLane=gapW*0.35;
+     let magmaW=gapW-safeLane-6;
+     let magmaX=(Math.random()<0.5)?openStart+safeLane+6:openStart;
+     walls.push({type:'magma',x:magmaX,y:y+30,w:magmaW,h:20});
+   } else if(row%2===1){
      let cx=dir===1?(RIGHT_IN-gapW/2):(LEFT_IN+gapW/2);
-     if(row%8===7) walls.push({type:'magma',x:cx-25,y:y+42,w:50,h:18});
-     else walls.push({type:'circle',x:cx,y:y+55,r:14});
+     walls.push({type:'circle',x:cx,y:y+55,r:14});
    }
    y+=100;dir*=-1;row++;
  }
@@ -299,6 +315,15 @@ function walls(){
  if(currentMap.startsWith("custom:")) return customMaps[currentMap.slice(7)]||[];
  return baseMaps[currentMap]||baseMaps.classic;
 }
+function roundRectPath(context,x,y,w,h,r){
+ context.beginPath();
+ context.moveTo(x+r,y);
+ context.arcTo(x+w,y,x+w,y+h,r);
+ context.arcTo(x+w,y+h,x,y+h,r);
+ context.arcTo(x,y+h,x,y,r);
+ context.arcTo(x,y,x+w,y,r);
+ context.closePath();
+}
 function drawObstacle(context,o){
  if(o.type==='circle'){
    context.beginPath();context.arc(o.x,o.y,o.r,0,Math.PI*2);context.fill();
@@ -324,18 +349,59 @@ function drawObstacle(context,o){
    context.restore();
    return;
  }
+ if(o.type==='platform'){
+   context.save();
+   context.fillStyle='#ffcf5c';
+   roundRectPath(context,o.x,o.y,o.w,o.h,7);
+   context.fill();
+   context.strokeStyle='rgba(180,120,0,.4)';context.lineWidth=1.5;context.stroke();
+   context.fillStyle='rgba(120,70,0,.35)';
+   for(let i=1;i<4;i++){ context.fillRect(o.x+i*(o.w/4)-1.5,o.y+3,3,Math.max(2,o.h-6)); }
+   context.restore();
+   return;
+ }
+ if(o.type==='spinner'){
+   let angle=o.angle||0, cx=o.x+o.w/2, cy=o.y+o.h/2;
+   context.save();
+   context.translate(cx,cy);context.rotate(angle);
+   context.fillStyle='#ff6b6b';
+   roundRectPath(context,-o.w/2,-o.h/2,o.w,o.h,o.h/2);
+   context.fill();
+   context.restore();
+   context.save();
+   context.beginPath();context.arc(cx,cy,6,0,Math.PI*2);context.fillStyle='#8a1f1f';context.fill();
+   context.restore();
+   return;
+ }
  let angle=o.angle||0;
- if(!angle){context.fillRect(o.x,o.y,o.w,o.h);return}
+ context.save();
+ if(o.deco==='funnel') context.fillStyle='#8ecbff';
+ else if(o.deco==='trampoline') context.fillStyle='#7bd88f';
+ if(!angle){ context.fillRect(o.x,o.y,o.w,o.h); context.restore(); return; }
  let cx=o.x+o.w/2, cy=o.y+o.h/2;
- context.save();context.translate(cx,cy);context.rotate(angle);
+ context.translate(cx,cy);context.rotate(angle);
  context.fillRect(-o.w/2,-o.h/2,o.w,o.h);
  context.restore();
 }
+// 시간(초)에 따라 움직이는 발판(platform)과 회전하는 바(spinner)의 현재 위치/각도를 계산
+function resolveObstacle(o,tSec){
+ if(o.type==='platform'){
+   let off=Math.sin(tSec*o.speed+(o.phase||0))*o.range;
+   if(o.axis==='y') return Object.assign({},o,{y:o.y+off,_vx:0,_vy:Math.cos(tSec*o.speed+(o.phase||0))*o.speed*o.range});
+   return Object.assign({},o,{x:o.x+off,_vx:Math.cos(tSec*o.speed+(o.phase||0))*o.speed*o.range,_vy:0});
+ }
+ if(o.type==='spinner'){
+   return Object.assign({},o,{angle:(o.angle||0)+tSec*(o.spin||0)});
+ }
+ return o;
+}
+function liveWalls(tSec){ return walls().map(o=>resolveObstacle(o,tSec)); }
 function draw(){
  ctx.clearRect(0,0,canvas.width,canvas.height);
  ctx.fillStyle="#fafafa";ctx.fillRect(0,0,canvas.width,canvas.height);
  ctx.fillStyle="#e8e9ed";
- for(const w of walls()) drawObstacle(ctx,w);
+ let nowSec=performance.now()/1000;
+ for(const w of liveWalls(nowSec)) drawObstacle(ctx,w);
  // 결승선
  ctx.setLineDash([8,6]);ctx.strokeStyle="#ff5a5f";ctx.lineWidth=3;
  ctx.beginPath();ctx.moveTo(40,FINISH_Y);ctx.lineTo(CANVAS_W-40,FINISH_Y);ctx.stroke();
@@ -379,6 +445,12 @@ function startGame(){
  running=true;last=performance.now();requestAnimationFrame(loop);
 }
 function resetGame(){running=false;balls=[];explosions=[];document.getElementById("result").classList.remove("show");draw();parseNames()}
+// 게임이 시작되지 않은 동안에도 움직이는 발판/회전 바가 미리보기로 계속 움직이도록 유지
+function idleTick(){
+ if(!running) draw();
+ requestAnimationFrame(idleTick);
+}
+requestAnimationFrame(idleTick);
 function hitsMagma(b,o){
  let angle=o.angle||0;
  if(!angle){
@@ -398,13 +470,15 @@ function hitsMagma(b,o){
 function loop(t){
  if(!running)return;
  let dt=Math.min(2,(t-last)/16.67);last=t;
+ let lw=liveWalls(t/1000);
  for(const b of balls){
    b.vy+=.035*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;
    if(b.x<LEFT_IN+b.r){b.x=LEFT_IN+b.r;b.vx=Math.abs(b.vx)*.9}
    if(b.x>RIGHT_IN-b.r){b.x=RIGHT_IN-b.r;b.vx=-Math.abs(b.vx)*.9}
    if(b.y<b.r){b.y=b.r;b.vy=Math.abs(b.vy)*.9}
-   for(const w of walls()){
+   for(const w of lw){
      if(w.type==='magma'){ if(hitsMagma(b,w)) b.dead=true; }
+     else if(w.type==='platform'){ collidePlatform(b,w); }
      else collideObstacle(b,w);
    }
  }
@@ -446,8 +520,9 @@ function collideObstacle(b,o){
    let nx=Math.max(o.x,Math.min(b.x,o.x+o.w)), ny=Math.max(o.y,Math.min(b.y,o.y+o.h));
    let dx=b.x-nx, dy=b.y-ny, d=dx*dx+dy*dy;
    if(d<b.r*b.r){
-     if(Math.abs(dx)>Math.abs(dy)){ b.vx=-b.vx*.86; b.x+=dx>0?b.r-dx:-(b.r+dx); }
-     else{ b.vy=-b.vy*.84; b.y+=dy>0?b.r-dy:-(b.r+dy); }
+     let bx=o.bounce!=null?o.bounce:.86, by=o.bounce!=null?o.bounce:.84;
+     if(Math.abs(dx)>Math.abs(dy)){ b.vx=-b.vx*bx; b.x+=dx>0?b.r-dx:-(b.r+dx); }
+     else{ b.vy=-b.vy*by; b.y+=dy>0?b.r-dy:-(b.r+dy); }
    }
    return;
  }
@@ -466,7 +541,25 @@ function collideObstacle(b,o){
    b.x+=wx; b.y+=wy;
    let nlen=Math.hypot(wx,wy)||1, nx=wx/nlen, ny=wy/nlen;
    let dot=b.vx*nx+b.vy*ny;
-   if(dot<0){ b.vx-=1.86*dot*nx; b.vy-=1.86*dot*ny; }
+   let factor=o.bounce!=null?(1+o.bounce):1.86;
+   if(dot<0){ b.vx-=factor*dot*nx; b.vy-=factor*dot*ny; }
+   // 회전하는 spinner에 부딪히면 회전 방향으로 살짝 밀려나 예측 불가능하게 튕겨나감
+   if(o.type==='spinner' && o.spin){
+     b.vx+=-ny*o.spin*3; b.vy+=nx*o.spin*3;
+   }
+ }
+}
+// 움직이는 발판(platform): 위에 얹힌 구슬을 발판의 이동 속도만큼 함께 밀어줌
+function collidePlatform(b,o){
+ let nx=Math.max(o.x,Math.min(b.x,o.x+o.w)), ny=Math.max(o.y,Math.min(b.y,o.y+o.h));
+ let dx=b.x-nx, dy=b.y-ny, d=dx*dx+dy*dy;
+ if(d<b.r*b.r){
+   if(Math.abs(dx)>Math.abs(dy)){ b.vx=-b.vx*.86; b.x+=dx>0?b.r-dx:-(b.r+dx); }
+   else{
+     b.vy=-b.vy*.84; b.y+=dy>0?b.r-dy:-(b.r+dy);
+     b.vx+=(o._vx||0)*0.4;
+     b.vy+=(o._vy||0)*0.4;
+   }
  }
 }
 function ballCollision(a,b){
@@ -493,6 +586,10 @@ function toolHint(){
  if(editorTool==='circle') return "클릭해서 원형 못을 추가하세요";
  if(editorTool==='gate') return "클릭해서 통로(기둥 두 개)를 추가하세요";
  if(editorTool==='magma') return "클릭해서 마그마를 추가하세요 (닿으면 즉시 아웃)";
+ if(editorTool==='funnel') return "클릭한 지점을 좁은 출구로 하는 깔때기를 추가하세요";
+ if(editorTool==='platform') return "클릭해서 좌우로 움직이는 발판을 추가하세요";
+ if(editorTool==='spinner') return "클릭해서 회전하는 바를 추가하세요 (부딪히면 튕겨나감)";
+ if(editorTool==='trampoline') return "클릭해서 트램폴린을 추가하세요 (크게 튕겨오름)";
  if(editorTool==='erase') return "클릭해서 삭제하세요";
  if(editorTool==='select') return "장애물을 클릭해 선택 후 회전/길이를 조정하세요";
  return "";
@@ -573,6 +670,20 @@ ecanvas.addEventListener("click",e=>{
    editorWalls.push({type:'rect',x:cx+gap/2,y:cy-50,w:14,h:100,angle:0});
  } else if(editorTool==="magma"){
    editorWalls.push({type:'magma',x:Math.round(x/10)*10-40,y:Math.round(y/10)*10-9,w:80,h:18,angle:0});
+ } else if(editorTool==="funnel"){
+   // 클릭 지점이 깔때기의 좁은 출구(중앙 아래) 위치가 되도록 좌우 두 팔을 대칭으로 배치
+   let theta=0.55, gap=54, armLen=120, thick=15;
+   let Lx=armLen*Math.sin(theta), Ly=armLen*Math.cos(theta);
+   let leftCx=x-gap/2-Lx/2, leftCy=y-Ly/2;
+   let rightCx=x+gap/2+Lx/2, rightCy=y-Ly/2;
+   editorWalls.push({type:'rect',x:leftCx-thick/2,y:leftCy-armLen/2,w:thick,h:armLen,angle:-theta,deco:'funnel'});
+   editorWalls.push({type:'rect',x:rightCx-thick/2,y:rightCy-armLen/2,w:thick,h:armLen,angle:theta,deco:'funnel'});
+ } else if(editorTool==="platform"){
+   editorWalls.push({type:'platform',x:x-55,y:y-8,w:110,h:16,axis:'x',range:80,speed:1.1,phase:Math.random()*6.28});
+ } else if(editorTool==="spinner"){
+   editorWalls.push({type:'spinner',x:x-65,y:y-7,w:130,h:14,angle:0,spin:(Math.random()<0.5?1:-1)*0.9});
+ } else if(editorTool==="trampoline"){
+   editorWalls.push({type:'rect',x:x-40,y:y-9,w:80,h:18,angle:0,deco:'trampoline',bounce:1.4});
  } else if(editorTool==="select"){
    let idx=-1;
    for(let i=editorWalls.length-1;i>=0;i--){if(hitTest(editorWalls[i],x,y)){idx=i;break}}
@@ -583,7 +694,7 @@ ecanvas.addEventListener("click",e=>{
 function clearEditor(){editorWalls=[];selectedIndex=-1;updateSelPanel();drawEditor()}
 function saveCustomMap(){
  let name=document.getElementById("mapTitle").value.trim()||"내 맵";
- customMaps[name]=editorWalls;localStorage.setItem("formwheel_marble_maps",JSON.stringify(customMaps));
+ customMaps[name]=editorWalls;saveMapsToStorage();
  closeEditor();currentMap="custom:"+name;document.getElementById("mapName").textContent=name;
  document.querySelectorAll(".mapBtn").forEach(x=>x.classList.remove("active"));draw();
 }
@@ -597,7 +708,7 @@ function openSaved(){
   let row=document.createElement("span");
   let use=document.createElement("button");use.textContent="사용";use.onclick=()=>{currentMap="custom:"+k;document.getElementById("mapName").textContent=k;closeSaved();draw()};
   let edit=document.createElement("button");edit.textContent="수정";edit.onclick=()=>{editCustomMap(k)};
-  let del=document.createElement("button");del.textContent="삭제";del.className="danger";del.onclick=()=>{delete customMaps[k];localStorage.setItem("formwheel_marble_maps",JSON.stringify(customMaps));openSaved()};
+  let del=document.createElement("button");del.textContent="삭제";del.className="danger";del.onclick=()=>{delete customMaps[k];saveMapsToStorage();openSaved()};
   row.append(use,edit,del);div.append(row);box.append(div);
  });
  document.getElementById("savedModal").classList.add("show");
