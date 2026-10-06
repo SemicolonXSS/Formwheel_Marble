@@ -28,7 +28,7 @@ button{border:0;border-radius:12px;padding:11px 15px;font-weight:750;cursor:poin
 button:hover{filter:brightness(.97)}
 .primary{background:#17181c;color:#fff}
 .danger{background:#fff0f0;color:#d33}
-.mapBtns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.mapBtns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.customMapArea{margin-top:10px;display:grid;gap:8px}.mapPreview{background:#fafbfc;border:1px solid #e5e7ed;border-radius:14px;padding:10px}.mapPreview canvas{width:100%;height:180px;object-fit:contain;background:#fff;border-radius:10px}.mapInfo{font-size:12px;color:#777;line-height:1.55}.syntaxBox{margin-top:12px;background:#f7f8fb;border:1px solid #e6e8ee;border-radius:13px;padding:11px;font-size:12px;line-height:1.65}.syntaxBox code{background:#fff;border:1px solid #e2e4e9;border-radius:6px;padding:1px 5px}.errorBox{display:none;margin-top:10px;padding:10px 12px;border-radius:11px;background:#fff1f1;border:1px solid #ffd4d4;color:#c62828;font-size:12px;line-height:1.5}.errorBox.show{display:block}.successBox{display:none;margin-top:10px;padding:10px 12px;border-radius:11px;background:#f0fff4;border:1px solid #ccefd8;color:#237a3b;font-size:12px;line-height:1.5}.successBox.show{display:block}.shareBox{display:none;margin-top:10px}.shareBox.show{display:block}.shareBox input{width:100%;padding:10px;border:1px solid #ddd;border-radius:10px;background:#fafafa;font-size:12px}.smallBtn{padding:8px 10px;font-size:12px}
 .mapBtn{padding:12px 7px;border:1px solid #e1e3e9;background:#fafbfc}
 .mapBtn.active{border-color:#17181c;background:#17181c;color:#fff}
 canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;border-radius:18px}
@@ -105,13 +105,40 @@ canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;bord
 <div class="card" style="margin-top:18px">
 <h2>맵 선택</h2>
 <div class="mapBtns">
-<button class="mapBtn active" data-map="classic">Classic</button>
-<button class="mapBtn" data-map="maze">Maze</button>
-<button class="mapBtn" data-map="chaos">Chaos</button>
+<button class="mapBtn active" data-map="classic">기본 맵 1</button>
+<button class="mapBtn" data-map="maze">기본 맵 2</button>
+<button class="mapBtn" data-map="chaos">기본 맵 3</button>
 </div>
-<div class="row" style="margin-top:10px">
-<button onclick="openEditor()">🎨 맵 만들기</button>
+<div class="customMapArea">
+<div class="row">
+<button onclick="openEditor()">🎨 커스텀 맵</button>
 <button onclick="openSaved()">📁 저장 맵</button>
+</div>
+<div class="mapPreview">
+<canvas id="mapPreview" width="420" height="180"></canvas>
+<div id="mapInfo" class="mapInfo">기본 맵 1 · 장애물 정보를 불러오는 중...</div>
+</div>
+<div class="syntaxBox">
+<b>커스텀 문법 설명</b><br>
+한 줄에 하나씩 입력합니다. 숫자는 픽셀 기준입니다.<br>
+<code>[wall,x,y,w,h]</code> 벽 · <code>[circle,x,y,r]</code> 원형 못 · <code>[magma,x,y,w,h]</code> 마그마 · <code>[gate,x,y,gap]</code> 통로<br>
+<code>[platform,x,y,w,h,range,speed]</code> 움직이는 발판 · <code>[spinner,x,y,w,h,spin]</code> 회전 바 · <code>[trampoline,x,y,w,h]</code> 트램폴린<br>
+<code>[finish,y]</code> 결승선 · <code>#</code> 뒤는 주석입니다.
+<div id="syntaxError" class="errorBox"></div>
+<div id="syntaxSuccess" class="successBox"></div>
+</div>
+<div class="row">
+<button class="smallBtn" onclick="loadCustomSyntaxExample()">문법 예시</button>
+<button class="smallBtn" onclick="openSyntaxEditor()">문법으로 만들기</button>
+<button class="smallBtn" onclick="shareCurrentMap()">🔗 맵 공유</button>
+</div>
+<div id="shareBox" class="shareBox">
+<input id="shareUrl" readonly>
+<div class="row" style="margin-top:7px">
+<button class="smallBtn" onclick="copyShareUrl()">링크 복사</button>
+<button class="smallBtn" onclick="closeShareBox()">닫기</button>
+</div>
+</div>
 </div>
 </div>
 
@@ -190,7 +217,23 @@ canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;bord
 <div class="row" style="margin-top:12px">
 <input id="mapTitle" placeholder="맵 이름" style="flex:1;min-width:180px">
 <button class="primary" onclick="saveCustomMap()">저장</button>
+<button onclick="editorToSyntax()">문법 보기</button>
 <button onclick="closeEditor()">닫기</button>
+</div>
+</div>
+</div>
+
+<div id="syntaxModal" class="modal">
+<div class="modalBox">
+<h2>⌨️ 커스텀 맵 문법</h2>
+<p class="editorHint">예: <code>[wall,180,300,120,16]</code>. 잘못된 줄은 저장/적용되지 않습니다.</p>
+<textarea id="syntaxInput" style="width:100%;min-height:270px;border:1px solid #dfe2e8;border-radius:14px;padding:13px;resize:vertical;outline:none;font-size:13px;line-height:1.65"></textarea>
+<div id="syntaxModalError" class="errorBox"></div>
+<div class="row" style="margin-top:12px">
+<button class="primary" onclick="applySyntaxMap()">미리보기 적용</button>
+<button onclick="validateSyntaxOnly()">문법 검사</button>
+<button onclick="loadCustomSyntaxExample()">예시</button>
+<button onclick="closeSyntaxEditor()">닫기</button>
 </div>
 </div>
 </div>
@@ -245,88 +288,95 @@ function sideWalls(){
  return [{type:'rect',x:40,y:90,w:18,h:CANVAS_H-140},{type:'rect',x:CANVAS_W-58,y:90,w:18,h:CANVAS_H-140}];
 }
 
-// 위에서 아래까지 지그재그로 어긋난 못들을 배치 - 사각형 벽과 원형 못을 섞어 다양하게 구성
+// 공식맵은 반복 플레이를 위한 고정 코스입니다.
+// 마그마는 모두 기존 대형 장애물보다 훨씬 작게(약 1/4 크기) 배치합니다.
 function genClassic(){
- let walls=sideWalls();
- let rowY=140,gap=82,row=0;
- while(rowY<CANVAS_H-130){
-   let offset=(row%2===0)?0:80;
-   let useCircle=row%3===2;
-   let useMagma=row%6===4;
-   let cols=[];
-   for(let x=70+offset;x<CANVAS_W-70;x+=160) cols.push(x);
-   cols.forEach((x,ci)=>{
-     if(useMagma && ci===Math.floor(cols.length/2)){
-       walls.push({type:'magma',x,y:rowY,w:50,h:16});
-     } else if(useCircle){
-       walls.push({type:'circle',x:x+27,y:rowY+7,r:16});
-     } else {
-       walls.push({type:'rect',x,y:rowY,w:54,h:14});
-     }
-   });
-   rowY+=gap;row++;
- }
+ const walls=sideWalls();
+ const mid=CANVAS_W/2;
+ // 초반: 기본 지그재그
+ walls.push({type:'rect',x:85,y:180,w:190,h:16});
+ walls.push({type:'rect',x:485,y:280,w:190,h:16});
+ walls.push({type:'circle',x:260,y:390,r:18});
+ walls.push({type:'circle',x:500,y:390,r:18});
+ walls.push({type:'rect',x:110,y:500,w:220,h:16});
+ walls.push({type:'rect',x:430,y:610,w:220,h:16});
+ // 가운데 마그마: 기존보다 4배 작게
+ walls.push({type:'magma',x:mid-28,y:735,w:56,h:8,angle:0});
+ walls.push({type:'rect',x:100,y:850,w:180,h:15});
+ walls.push({type:'rect',x:480,y:950,w:180,h:15});
+ walls.push({type:'circle',x:300,y:1060,r:20});
+ walls.push({type:'circle',x:460,y:1060,r:20});
+ walls.push({type:'rect',x:120,y:1180,w:205,h:15});
+ walls.push({type:'rect',x:435,y:1290,w:205,h:15});
+ // 후반 소형 마그마
+ walls.push({type:'magma',x:175,y:1410,w:52,h:8,angle:0});
+ walls.push({type:'magma',x:535,y:1515,w:52,h:8,angle:0});
+ walls.push({type:'rect',x:95,y:1630,w:190,h:15});
+ walls.push({type:'rect',x:475,y:1740,w:190,h:15});
+ walls.push({type:'circle',x:300,y:1850,r:21});
+ walls.push({type:'circle',x:500,y:1850,r:21});
+ walls.push({type:'rect',x:135,y:1970,w:205,h:15});
+ walls.push({type:'rect',x:425,y:2075,w:205,h:15});
  return walls;
 }
-// 좌우로 번갈아 막힌 통로를 만들어 S자로 굽이치는 미로 + 원형 못을 섞어 변화를 줌.
-// 마그마는 미로 중간의 "관문" 한 곳에만, 통로 폭의 약 2/3를 막는 형태로 배치해서
-// 나머지 1/3의 좁은 안전 통로를 통과한 구슬만 생존하도록 설계 (대략 3명 중 1명꼴 생존)
+
 function genMaze(){
- let walls=sideWalls();
- let y=150,dir=1,gapW=230,row=0;
- let totalRows=Math.ceil((CANVAS_H-150-150)/100);
- let gateRow=Math.round(totalRows*0.5); // 관문 위치: 미로 중간쯤
- while(y<CANVAS_H-150){
-   if(dir===1) walls.push({type:'rect',x:LEFT_IN,y,w:(RIGHT_IN-LEFT_IN)-gapW,h:16});
-   else walls.push({type:'rect',x:LEFT_IN+gapW,y,w:(RIGHT_IN-LEFT_IN)-gapW,h:16});
-   let openStart=dir===1?(RIGHT_IN-gapW):LEFT_IN;
-   if(row===gateRow){
-     // 통로 폭(gapW)의 약 65%를 마그마가 막고, 벽 쪽에 약 35%의 안전한 틈만 남김
-     let safeLane=gapW*0.35;
-     let magmaW=gapW-safeLane-6;
-     let magmaX=(Math.random()<0.5)?openStart+safeLane+6:openStart;
-     walls.push({type:'magma',x:magmaX,y:y+30,w:magmaW,h:20});
-   } else if(row%2===1){
-     let cx=dir===1?(RIGHT_IN-gapW/2):(LEFT_IN+gapW/2);
-     walls.push({type:'circle',x:cx,y:y+55,r:14});
+ const walls=sideWalls();
+ const left=LEFT_IN, right=RIGHT_IN;
+ const gapW=250;
+ // 통로를 기존보다 위쪽으로 배치하고 층 사이 간격도 넉넉하게 확보합니다.
+ const rows=[145,245,345,445,545,645,745,845,945,1045,1145,1245,1345,1445,1545,1645,1745,1845,1945];
+ rows.forEach((y,i)=>{
+   const dir=i%2===0?1:-1;
+   if(dir===1){
+     walls.push({type:'rect',x:left,y,w:(right-left)-gapW,h:16});
+   }else{
+     walls.push({type:'rect',x:left+gapW,y,w:(right-left)-gapW,h:16});
    }
-   y+=100;dir*=-1;row++;
- }
+   // 통로 중앙을 막지 않는 작은 장애물만 배치
+   if(i%3===1){
+     const cx=dir===1 ? right-gapW/2 : left+gapW/2;
+     walls.push({type:'circle',x:cx,y:y+48,r:14});
+   }
+   // 미로 중간의 작은 마그마도 1/4 크기
+   if(i===9){
+     const mx=dir===1 ? right-gapW+24 : left+gapW-80;
+     walls.push({type:'magma',x:mx,y:y+28,w:56,h:8,angle:0});
+   }
+ });
+ // 아래쪽 통로를 살짝 위로 끌어올리는 보조벽
+ walls.push({type:'rect',x:100,y:2050,w:180,h:15});
+ walls.push({type:'rect',x:480,y:2150,w:180,h:15});
  return walls;
 }
-// 사각형, 원형, 기울어진 램프, 좁은 통로(기둥), 마그마까지 뒤섞은 혼돈 맵 - 완전히 막히지 않도록 한 줄에 1~2개로 제한
+
 function genChaos(){
- let walls=sideWalls();
- let y=150;
- while(y<CANVAS_H-150){
-   let n=1+Math.floor(Math.random()*2);
-   for(let i=0;i<n;i++){
-     let kind=Math.random();
-     if(kind<0.08){
-       let w=45+Math.random()*45;
-       let x=LEFT_IN+10+Math.random()*((RIGHT_IN-LEFT_IN-20)-w);
-       walls.push({type:'magma',x,y,w,h:16});
-     } else if(kind<0.20){
-       let gap=46+Math.random()*30;
-       let cx=LEFT_IN+40+Math.random()*((RIGHT_IN-LEFT_IN-80)-gap);
-       walls.push({type:'rect',x:cx,y,w:14,h:70});
-       walls.push({type:'rect',x:cx+14+gap,y,w:14,h:70});
-     } else if(kind<0.50){
-       let x=LEFT_IN+10+Math.random()*(RIGHT_IN-LEFT_IN-20);
-       walls.push({type:'circle',x,y:y+7,r:14+Math.random()*8});
-     } else if(kind<0.75){
-       let w=45+Math.random()*55;
-       let x=LEFT_IN+10+Math.random()*((RIGHT_IN-LEFT_IN-20)-w);
-       let angle=(Math.random()*40-20)*Math.PI/180;
-       walls.push({type:'rect',x,y,w,h:14,angle});
-     } else {
-       let w=45+Math.random()*55;
-       let x=LEFT_IN+10+Math.random()*((RIGHT_IN-LEFT_IN-20)-w);
-       walls.push({type:'rect',x,y,w,h:15});
-     }
-   }
-   y+=75+Math.random()*40;
- }
+ const walls=sideWalls();
+ // 공식맵 3: 고정 건틀렛. 랜덤성을 없애고 연속 장애물 공략에 집중합니다.
+ walls.push({type:'rect',x:90,y:165,w:210,h:15});
+ walls.push({type:'magma',x:515,y:260,w:55,h:8,angle:0});
+ walls.push({type:'circle',x:300,y:365,r:18});
+ walls.push({type:'circle',x:465,y:365,r:18});
+ walls.push({type:'rect',x:420,y:470,w:230,h:15,angle:-0.08});
+ walls.push({type:'magma',x:155,y:585,w:58,h:8,angle:0});
+ walls.push({type:'rect',x:100,y:700,w:170,h:15});
+ walls.push({type:'rect',x:490,y:790,w:170,h:15});
+ // 회전/좁은 구간을 표현하는 연속 벽
+ walls.push({type:'rect',x:235,y:900,w:290,h:14,angle:0.12});
+ walls.push({type:'circle',x:160,y:1015,r:17});
+ walls.push({type:'circle',x:590,y:1015,r:17});
+ walls.push({type:'magma',x:345,y:1115,w:60,h:8,angle:0});
+ walls.push({type:'rect',x:100,y:1225,w:215,h:15});
+ walls.push({type:'rect',x:445,y:1335,w:215,h:15});
+ walls.push({type:'magma',x:175,y:1450,w:55,h:8,angle:0});
+ walls.push({type:'magma',x:530,y:1560,w:55,h:8,angle:0});
+ walls.push({type:'circle',x:285,y:1665,r:20});
+ walls.push({type:'circle',x:475,y:1665,r:20});
+ walls.push({type:'rect',x:120,y:1775,w:210,h:15,angle:-0.1});
+ walls.push({type:'rect',x:430,y:1885,w:210,h:15,angle:0.1});
+ // 최종 소형 마그마 구간
+ walls.push({type:'magma',x:330,y:1995,w:62,h:8,angle:0});
+ walls.push({type:'rect',x:150,y:2090,w:190,h:15});
  return walls;
 }
 
@@ -354,8 +404,8 @@ function clearNames(){document.getElementById("names").value="";applyNames()}
 document.getElementById("names").addEventListener("input",parseNames);
 
 document.querySelectorAll(".mapBtn").forEach(b=>b.onclick=()=>{
- document.querySelectorAll(".mapBtn").forEach(x=>x.classList.remove("active"));
- b.classList.add("active");currentMap=b.dataset.map;FINISH_Y=getFinishForMap();document.getElementById("mapName").textContent=b.textContent;draw();
+document.querySelectorAll(".mapBtn").forEach(x=>x.classList.remove("active"));
+b.classList.add("active");currentMap=b.dataset.map;FINISH_Y=getFinishForMap();document.getElementById("mapName").textContent=b.textContent;draw();updateMapPreview(currentMapData(),FINISH_Y,b.textContent);
 });
 
 function walls(){ return currentMapData(); }
@@ -440,6 +490,84 @@ function resolveObstacle(o,tSec){
  return o;
 }
 function liveWalls(tSec){ return walls().map(o=>resolveObstacle(o,tSec)); }
+
+// ===== Custom map syntax, preview, save/share =====
+const MAP_SYNTAX_VERSION=1;
+function setBox(id,msg,show=true){const el=document.getElementById(id);if(!el)return;el.textContent=msg||"";el.classList.toggle("show",!!show);}
+function parseMapSyntax(text){
+ const lines=String(text||"").split(/\r?\n/),walls=[],errors=[];let finish=CANVAS_H-50;
+ lines.forEach((raw,idx)=>{
+  const line=raw.replace(/#.*$/,"").trim();if(!line)return;
+  const m=line.match(/^\[([^\]]+)\]$/);if(!m){errors.push(`${idx+1}번째 줄: [ ] 형식이 아닙니다.`);return;}
+  const p=m[1].split(",").map(v=>v.trim()),type=p[0].toLowerCase();
+  const nums=n=>{if(p.length!==n+1)return null;const a=p.slice(1).map(Number);return a.every(Number.isFinite)?a:null;};
+  if(type==="finish"){const a=nums(1);if(!a||a[0]<FINISH_MIN||a[0]>FINISH_MAX){errors.push(`${idx+1}번째 줄: [finish,y] 형식 또는 범위가 잘못되었습니다.`);return;}finish=Math.round(a[0]);return;}
+  if(type==="wall"){const a=nums(4);if(!a||a[2]<=0||a[3]<=0){errors.push(`${idx+1}번째 줄: [wall,x,y,w,h] 형식이 아닙니다.`);return;}walls.push({type:"rect",x:a[0],y:a[1],w:a[2],h:a[3],angle:0});return;}
+  if(type==="circle"){const a=nums(3);if(!a||a[2]<=0){errors.push(`${idx+1}번째 줄: [circle,x,y,r] 형식이 아닙니다.`);return;}walls.push({type:"circle",x:a[0],y:a[1],r:a[2]});return;}
+  if(type==="magma"){const a=nums(4);if(!a||a[2]<=0||a[3]<=0){errors.push(`${idx+1}번째 줄: [magma,x,y,w,h] 형식이 아닙니다.`);return;}walls.push({type:"magma",x:a[0],y:a[1],w:a[2],h:a[3],angle:0});return;}
+  if(type==="gate"){const a=nums(3);if(!a||a[2]<=0){errors.push(`${idx+1}번째 줄: [gate,x,y,gap] 형식이 아닙니다.`);return;}const [cx,cy,gap]=a;walls.push({type:"rect",x:cx-gap/2-14,y:cy-50,w:14,h:100,angle:0},{type:"rect",x:cx+gap/2,y:cy-50,w:14,h:100,angle:0});return;}
+  if(type==="platform"){const a=nums(6);if(!a||a[2]<=0||a[3]<=0||a[4]<0||a[5]<=0){errors.push(`${idx+1}번째 줄: [platform,x,y,w,h,range,speed] 형식이 아닙니다.`);return;}walls.push({type:"platform",x:a[0],y:a[1],w:a[2],h:a[3],axis:"x",range:a[4],speed:a[5],phase:0});return;}
+  if(type==="spinner"){const a=nums(5);if(!a||a[2]<=0||a[3]<=0||a[4]===0){errors.push(`${idx+1}번째 줄: [spinner,x,y,w,h,spin] 형식이 아닙니다.`);return;}walls.push({type:"spinner",x:a[0],y:a[1],w:a[2],h:a[3],angle:0,spin:a[4]});return;}
+  if(type==="trampoline"){const a=nums(4);if(!a||a[2]<=0||a[3]<=0){errors.push(`${idx+1}번째 줄: [trampoline,x,y,w,h] 형식이 아닙니다.`);return;}walls.push({type:"rect",x:a[0],y:a[1],w:a[2],h:a[3],angle:0,deco:"trampoline",bounce:1.4});return;}
+  errors.push(`${idx+1}번째 줄: 알 수 없는 명령 "${p[0]}".`);
+ });
+ walls.forEach((o,i)=>{const x=o.x||0,y=o.y||0,w=o.w||0,h=o.h||0,r=o.r||0;if(o.type==="circle"){if(x-r<0||x+r>CANVAS_W||y-r<0||y+r>CANVAS_H)errors.push(`장애물 ${i+1}: 맵 범위를 벗어납니다.`);}else if(x<0||y<0||x+w>CANVAS_W||y+h>CANVAS_H)errors.push(`장애물 ${i+1}: 맵 범위를 벗어납니다.`);});
+ return {walls,finishY:finish,errors};
+}
+function mapToSyntax(list,finishY){
+ const lines=[`# FormWheel Marble Map v${MAP_SYNTAX_VERSION}`];
+ (list||[]).forEach(o=>{
+  if(o.type==="circle")lines.push(`[circle,${Math.round(o.x)},${Math.round(o.y)},${Math.round(o.r)}]`);
+  else if(o.type==="magma")lines.push(`[magma,${Math.round(o.x)},${Math.round(o.y)},${Math.round(o.w)},${Math.round(o.h)}]`);
+  else if(o.type==="platform")lines.push(`[platform,${Math.round(o.x)},${Math.round(o.y)},${Math.round(o.w)},${Math.round(o.h)},${Math.round(o.range||80)},${Number(o.speed||1).toFixed(2)}]`);
+  else if(o.type==="spinner")lines.push(`[spinner,${Math.round(o.x)},${Math.round(o.y)},${Math.round(o.w)},${Math.round(o.h)},${Number(o.spin||1).toFixed(2)}]`);
+  else if(o.deco==="trampoline")lines.push(`[trampoline,${Math.round(o.x)},${Math.round(o.y)},${Math.round(o.w)},${Math.round(o.h)}]`);
+  else if(o.deco!=="funnel")lines.push(`[wall,${Math.round(o.x)},${Math.round(o.y)},${Math.round(o.w)},${Math.round(o.h)}]`);
+ });
+ lines.push(`[finish,${Math.round(finishY)}]`);return lines.join("\n");
+}
+function openSyntaxEditor(){document.getElementById("syntaxInput").value=mapToSyntax(currentMapData(),getFinishForMap());document.getElementById("syntaxModal").classList.add("show");}
+function closeSyntaxEditor(){document.getElementById("syntaxModal").classList.remove("show");}
+function validateSyntaxOnly(){
+ const p=parseMapSyntax(document.getElementById("syntaxInput").value),el=document.getElementById("syntaxModalError");el.className="errorBox";
+ if(p.errors.length){el.innerHTML=p.errors.slice(0,12).map(escapeHtml).join("<br>")+(p.errors.length>12?`<br>외 ${p.errors.length-12}개`:"");el.classList.add("show");return false;}
+ el.textContent=`문법이 올바릅니다. 장애물 ${p.walls.length}개 · 결승선 ${p.finishY}px`;el.className="successBox show";return true;
+}
+function applySyntaxMap(){
+ const p=parseMapSyntax(document.getElementById("syntaxInput").value),el=document.getElementById("syntaxModalError");el.className="errorBox";
+ if(p.errors.length){el.innerHTML=p.errors.slice(0,12).map(escapeHtml).join("<br>")+(p.errors.length>12?`<br>외 ${p.errors.length-12}개`:"");el.classList.add("show");return;}
+ editorWalls=cloneMap(p.walls);FINISH_Y=p.finishY;document.getElementById("finishRange").value=FINISH_Y;closeSyntaxEditor();document.getElementById("editorModal").classList.add("show");drawEditor();updateMapPreview(editorWalls,FINISH_Y,"문법 적용 미리보기");
+}
+function loadCustomSyntaxExample(){
+ document.getElementById("syntaxInput").value=`# 예시 커스텀 맵
+[wall,120,220,180,16]
+[circle,420,340,22]
+[gate,380,520,80]
+[magma,180,760,140,18]
+[platform,250,980,120,16,90,1.2]
+[spinner,420,1220,140,14,1.0]
+[trampoline,300,1480,100,18]
+[wall,160,1760,200,16]
+[finish,2050]`;document.getElementById("syntaxModal").classList.add("show");
+}
+function editorToSyntax(){document.getElementById("syntaxInput").value=mapToSyntax(editorWalls,FINISH_Y);closeEditor();document.getElementById("syntaxModal").classList.add("show");}
+function updateMapPreview(data,finishY,label){
+ const pc=document.getElementById("mapPreview");if(!pc)return;const pctx=pc.getContext("2d"),sx=pc.width/CANVAS_W,sy=pc.height/CANVAS_H;
+ pctx.clearRect(0,0,pc.width,pc.height);pctx.fillStyle="#fafafa";pctx.fillRect(0,0,pc.width,pc.height);pctx.save();pctx.scale(sx,sy);pctx.fillStyle="#e8e9ed";(data||[]).forEach(o=>drawObstacle(pctx,o));pctx.setLineDash([7,5]);pctx.strokeStyle="#ff5a5f";pctx.lineWidth=4/sx;pctx.beginPath();pctx.moveTo(40,finishY);pctx.lineTo(CANVAS_W-40,finishY);pctx.stroke();pctx.restore();
+ const info=document.getElementById("mapInfo");if(info)info.textContent=`${label||document.getElementById("mapName").textContent} · 장애물 ${(data||[]).length}개 · 결승선 ${Math.round(finishY)}px`;
+}
+function shareCurrentMap(){
+ const d=currentMap.startsWith("custom:")?customMaps[currentMap.slice(7)]:null,obj={v:1,name:d?currentMap.slice(7):document.getElementById("mapName").textContent,walls:cloneMap(d?.walls||d||currentMapData()),finishY:d?.finishY||getFinishForMap()};
+ try{const raw=JSON.stringify(obj),enc=btoa(unescape(encodeURIComponent(raw))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""),url=location.origin+location.pathname+"#map="+enc;document.getElementById("shareUrl").value=url;document.getElementById("shareBox").classList.add("show");navigator.clipboard?.writeText(url).then(()=>setBox("syntaxSuccess","공유 링크를 만들었습니다. 클립보드에도 복사했습니다.",true)).catch(()=>{});}catch(e){setBox("syntaxError","맵 공유 링크 생성에 실패했습니다.",true);}
+}
+function closeShareBox(){document.getElementById("shareBox").classList.remove("show");}
+function copyShareUrl(){const input=document.getElementById("shareUrl");input.select();input.setSelectionRange(0,99999);navigator.clipboard?.writeText(input.value).then(()=>setBox("syntaxSuccess","공유 링크를 복사했습니다.",true)).catch(()=>document.execCommand("copy"));}
+function loadSharedMapFromHash(){
+ const m=location.hash.match(/^#map=([A-Za-z0-9_-]+)$/);if(!m)return;
+ try{const b64=m[1].replace(/-/g,"+").replace(/_/g,"/")+"===".slice((m[1].length+3)%4),obj=JSON.parse(decodeURIComponent(escape(atob(b64))));if(!obj||!Array.isArray(obj.walls))return;
+ const name=String(obj.name||"공유 맵").slice(0,40);customMaps[name]={walls:cloneMap(obj.walls),finishY:Number(obj.finishY)||CANVAS_H-50};saveMapsToStorage();currentMap="custom:"+name;FINISH_Y=getFinishForMap();document.getElementById("mapName").textContent=name;updateMapPreview(currentMapData(),FINISH_Y,name);setBox("syntaxSuccess",`공유 맵 "${name}"을 불러왔습니다.`,true);history.replaceState(null,"",location.pathname);}catch(e){setBox("syntaxError","공유 맵 데이터가 올바르지 않아 불러오지 못했습니다.",true);}
+}
+
 function draw(){
  ctx.clearRect(0,0,canvas.width,canvas.height);
  ctx.fillStyle="#fafafa";ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -533,7 +661,7 @@ function startGame(){
 }
 function resetGame(){
  clearInterval(countdownTimer);countdownTimer=null;running=false;racePhase="ready";balls=[];finishOrder=[];explosions=[];raceStartedAt=0;hideCountdown();
- document.getElementById("result").classList.remove("show");FINISH_Y=getFinishForMap();draw();parseNames();
+ document.getElementById("result").classList.remove("show");FINISH_Y=getFinishForMap();draw();parseNames();updateMapPreview(currentMapData(),FINISH_Y,"기본 맵 1");loadSharedMapFromHash();
 }
 function idleTick(){
  if(!running) draw();
@@ -811,10 +939,8 @@ ecanvas.addEventListener("click",e=>{
 });
 function clearEditor(){editorWalls=[];selectedIndex=-1;updateSelPanel();drawEditor()}
 function saveCustomMap(){
- let name=document.getElementById("mapTitle").value.trim()||"내 맵";
- customMaps[name]={walls:cloneMap(editorWalls),finishY:FINISH_Y};saveMapsToStorage();
- closeEditor();currentMap="custom:"+name;document.getElementById("mapName").textContent=name;
- document.querySelectorAll(".mapBtn").forEach(x=>x.classList.remove("active"));draw();
+let name=document.getElementById("mapTitle").value.trim()||"내 맵";if(name.length>40)name=name.slice(0,40);
+customMaps[name]={walls:cloneMap(editorWalls),finishY:FINISH_Y};saveMapsToStorage();closeEditor();currentMap="custom:"+name;document.getElementById("mapName").textContent=name;document.querySelectorAll(".mapBtn").forEach(x=>x.classList.remove("active"));draw();updateMapPreview(editorWalls,FINISH_Y,name);setBox("syntaxSuccess",`"${name}" 맵을 저장했습니다.`,true);
 }
 function openSaved(){
  let box=document.getElementById("savedList");box.innerHTML="";
@@ -825,7 +951,7 @@ function openSaved(){
   const saved=customMaps[k]||{}; const obstacleCount=(saved.walls||saved).length||0;
   div.innerHTML=`<span><b>${escapeHtml(k)}</b><small style="display:block;color:#888;margin-top:2px">장애물 ${obstacleCount}개 · 결승선 ${Math.round(saved.finishY||FINISH_Y)}px</small></span>`;
   let row=document.createElement("span");
-  let use=document.createElement("button");use.textContent="사용";use.onclick=()=>{currentMap="custom:"+k;FINISH_Y=getFinishForMap();document.getElementById("mapName").textContent=k;closeSaved();draw()};
+  let use=document.createElement("button");use.textContent="사용";use.onclick=()=>{currentMap="custom:"+k;FINISH_Y=getFinishForMap();document.getElementById("mapName").textContent=k;closeSaved();draw();updateMapPreview(currentMapData(),FINISH_Y,k)};
   let edit=document.createElement("button");edit.textContent="수정";edit.onclick=()=>{editCustomMap(k)};
   let del=document.createElement("button");del.textContent="삭제";del.className="danger";del.onclick=()=>{delete customMaps[k];saveMapsToStorage();openSaved()};
   row.append(use,edit,del);div.append(row);box.append(div);
