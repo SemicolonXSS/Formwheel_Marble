@@ -28,7 +28,7 @@ button{border:0;border-radius:12px;padding:11px 15px;font-weight:750;cursor:poin
 button:hover{filter:brightness(.97)}
 .primary{background:#17181c;color:#fff}
 .danger{background:#fff0f0;color:#d33}
-.mapBtns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.customMapArea{margin-top:10px;display:grid;gap:8px}.mapPreview{background:#fafbfc;border:1px solid #e5e7ed;border-radius:14px;padding:10px}.mapPreview canvas{width:100%;height:180px;object-fit:contain;background:#fff;border-radius:10px}.mapInfo{font-size:12px;color:#777;line-height:1.55}.syntaxBox{margin-top:12px;background:#f7f8fb;border:1px solid #e6e8ee;border-radius:13px;padding:11px;font-size:12px;line-height:1.65}.syntaxBox code{background:#fff;border:1px solid #e2e4e9;border-radius:6px;padding:1px 5px}.errorBox{display:none;margin-top:10px;padding:10px 12px;border-radius:11px;background:#fff1f1;border:1px solid #ffd4d4;color:#c62828;font-size:12px;line-height:1.5}.errorBox.show{display:block}.successBox{display:none;margin-top:10px;padding:10px 12px;border-radius:11px;background:#f0fff4;border:1px solid #ccefd8;color:#237a3b;font-size:12px;line-height:1.5}.successBox.show{display:block}.shareBox{display:none;margin-top:10px}.shareBox.show{display:block}.shareBox input{width:100%;padding:10px;border:1px solid #ddd;border-radius:10px;background:#fafafa;font-size:12px}.smallBtn{padding:8px 10px;font-size:12px}
+.mapBtns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.customMapArea{margin-top:10px;display:grid;gap:8px}.mapPreview{background:#fafbfc;border:1px solid #e5e7ed;border-radius:14px;padding:10px}.mapPreview canvas{width:100%;height:180px;object-fit:contain;background:#fff;border-radius:10px}.mapInfo{font-size:12px;color:#777;line-height:1.55}.syntaxBox{margin-top:12px;background:#f7f8fb;border:1px solid #e6e8ee;border-radius:13px;padding:11px;font-size:12px;line-height:1.65}.syntaxBox code{background:#fff;border:1px solid #e2e4e9;border-radius:6px;padding:1px 5px}.errorBox{display:none;margin-top:10px;padding:10px 12px;border-radius:11px;background:#fff1f1;border:1px solid #ffd4d4;color:#c62828;font-size:12px;line-height:1.5}.errorBox.show{display:block}.successBox{display:none;margin-top:10px;padding:10px 12px;border-radius:11px;background:#f0fff4;border:1px solid #ccefd8;color:#237a3b;font-size:12px;line-height:1.5}.successBox.show{display:block}.shareBox{display:none;margin-top:10px}.shareBox.show{display:block}.shareBox input{width:100%;padding:10px;border:1px solid #ddd;border-radius:10px;background:#fafafa;font-size:12px}.qrBox{display:none;margin-top:10px;padding:14px;text-align:center;border:1px solid #e5e7ed;border-radius:14px;background:#fff}.qrBox.show{display:block}.qrBox img{display:block;width:220px;height:220px;max-width:100%;margin:0 auto;border-radius:8px}.qrHint{font-size:11px;color:#777;margin-top:8px}.smallBtn{padding:8px 10px;font-size:12px}.speedRow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}.speedBtns{display:flex;gap:6px;flex-wrap:wrap}.speedBtns button{padding:8px 12px;font-size:12px;border:1px solid #e0e2e8;background:#f7f8fa}.speedBtns button.active{background:#17181c;color:#fff;border-color:#17181c}.previewModalCanvas{width:100%;height:min(72vh,720px);object-fit:contain;background:#fafafa;border:1px solid #e4e5e9;border-radius:16px}
 .mapBtn{padding:12px 7px;border:1px solid #e1e3e9;background:#fafbfc}
 .mapBtn.active{border-color:#17181c;background:#17181c;color:#fff}
 canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;border-radius:18px}
@@ -113,6 +113,7 @@ canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;bord
 <div class="row">
 <button onclick="openEditor()">🎨 커스텀 맵</button>
 <button onclick="openSaved()">📁 저장 맵</button>
+<button onclick="openMapPreview()">🔍 크게 보기</button>
 </div>
 <div class="mapPreview">
 <canvas id="mapPreview" width="420" height="180"></canvas>
@@ -131,12 +132,15 @@ canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;bord
 <button class="smallBtn" onclick="loadCustomSyntaxExample()">문법 예시</button>
 <button class="smallBtn" onclick="openSyntaxEditor()">문법으로 만들기</button>
 <button class="smallBtn" onclick="shareCurrentMap()">🔗 맵 공유</button>
+<button class="smallBtn" onclick="quickSaveCurrentMap()">💾 현재 맵 저장</button>
 </div>
 <div id="shareBox" class="shareBox">
 <input id="shareUrl" readonly>
 <div class="row" style="margin-top:7px">
 <button class="smallBtn" onclick="copyShareUrl()">링크 복사</button>
+<button class="smallBtn" onclick="toggleShareQr()">▣ QR 보기</button>
 <button class="smallBtn" onclick="closeShareBox()">닫기</button>
+<div id="qrBox" class="qrBox"><img id="shareQr" alt="맵 공유 QR 코드"><div class="qrHint">이 QR을 스캔하면 현재 맵을 바로 열 수 있어요.</div></div>
 </div>
 </div>
 </div>
@@ -144,6 +148,13 @@ canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;bord
 
 <div class="card" style="margin-top:18px">
 <h2>게임 설정</h2>
+<div class="speedRow"><span style="font-size:13px;font-weight:800;color:#555">게임 배속</span><div id="speedBtns" class="speedBtns">
+<button data-speed="0.5" onclick="setGameSpeed(0.5)">0.5x</button>
+<button data-speed="1" class="active" onclick="setGameSpeed(1)">1x</button>
+<button data-speed="2" onclick="setGameSpeed(2)">2x</button>
+<button data-speed="3" onclick="setGameSpeed(3)">3x</button>
+<button data-speed="5" onclick="setGameSpeed(5)">5x</button>
+</div></div>
 <div class="row">
 <label style="display:flex;align-items:center;gap:8px"><input id="labels" type="checkbox" checked> 구슬 이름 표시</label>
 <label style="display:flex;align-items:center;gap:8px"><input id="sound" type="checkbox" checked> 효과음</label>
@@ -238,6 +249,14 @@ canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;bord
 </div>
 </div>
 
+<div id="previewModal" class="modal">
+<div class="modalBox" style="width:min(820px,100%)">
+<h2>🔍 맵 미리보기</h2>
+<canvas id="bigMapPreview" class="previewModalCanvas" width="760" height="2200"></canvas>
+<div id="bigMapInfo" class="mapInfo" style="margin-top:8px"></div>
+<div class="row" style="margin-top:12px"><button onclick="closeMapPreview()">닫기</button><button class="primary" onclick="shareCurrentMap();closeMapPreview()">🔗 이 맵 공유</button></div>
+</div></div>
+
 <div id="savedModal" class="modal">
 <div class="modalBox">
 <h2>📁 저장한 맵</h2>
@@ -254,7 +273,7 @@ const LEFT_IN=58, RIGHT_IN=CANVAS_W-58, START_Y=105;
 let FINISH_Y=CANVAS_H-50;
 const FINISH_MIN=100, FINISH_MAX=CANVAS_H-10;
 
-let currentMap="classic",balls=[],running=false,last=0,editorTool="wall",editorWalls=[],selectedIndex=-1,explosions=[],startCount=0;
+let currentMap="classic",balls=[],running=false,last=0,gameSpeed=1,editorTool="wall",editorWalls=[],selectedIndex=-1,explosions=[],startCount=0;
 let racePhase="ready",countdownValue=0,countdownTimer=null,raceStartedAt=0,finishOrder=[],audioCtx=null;
 let customMaps={};
 try{ customMaps=JSON.parse(localStorage.getItem("formwheel_marble_maps")||"{}"); }catch(e){ customMaps={}; }
@@ -557,11 +576,24 @@ function updateMapPreview(data,finishY,label){
  const info=document.getElementById("mapInfo");if(info)info.textContent=`${label||document.getElementById("mapName").textContent} · 장애물 ${(data||[]).length}개 · 결승선 ${Math.round(finishY)}px`;
 }
 function shareCurrentMap(){
- const d=currentMap.startsWith("custom:")?customMaps[currentMap.slice(7)]:null,obj={v:1,name:d?currentMap.slice(7):document.getElementById("mapName").textContent,walls:cloneMap(d?.walls||d||currentMapData()),finishY:d?.finishY||getFinishForMap()};
- try{const raw=JSON.stringify(obj),enc=btoa(unescape(encodeURIComponent(raw))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""),url=location.origin+location.pathname+"#map="+enc;document.getElementById("shareUrl").value=url;document.getElementById("shareBox").classList.add("show");navigator.clipboard?.writeText(url).then(()=>setBox("syntaxSuccess","공유 링크를 만들었습니다. 클립보드에도 복사했습니다.",true)).catch(()=>{});}catch(e){setBox("syntaxError","맵 공유 링크 생성에 실패했습니다.",true);}
+ const d=currentMap.startsWith("custom:")?customMaps[currentMap.slice(7)]:null,obj={v:1,name:d?currentMap.slice(7):document.getElementById("mapName").textContent,walls:cloneMap(d?.walls||currentMapData()),finishY:d?.finishY||getFinishForMap()};
+ try{
+   const raw=JSON.stringify(obj),enc=btoa(unescape(encodeURIComponent(raw))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""),url=location.origin+location.pathname+"#map="+enc;
+   document.getElementById("shareUrl").value=url;document.getElementById("shareBox").classList.add("show");
+   generateShareQr(url);
+   if(navigator.share){navigator.share({title:`FormWheel Marble · ${obj.name}`,text:"FormWheel Marble 맵을 공유합니다!",url}).then(()=>setBox("syntaxSuccess","공유 완료!",true)).catch(()=>{});}
+   else copyShareUrl();
+ }catch(e){setBox("syntaxError","맵 공유 링크 생성에 실패했습니다.",true);}
 }
+function generateShareQr(url){
+ const box=document.getElementById("qrBox"),img=document.getElementById("shareQr");
+ if(!box||!img)return;
+ img.src="https://api.qrserver.com/v1/create-qr-code/?size=440x440&margin=12&data="+encodeURIComponent(url);
+ box.classList.add("show");
+}
+function toggleShareQr(){const box=document.getElementById("qrBox");if(!box)return;box.classList.toggle("show");if(box.classList.contains("show")){const url=document.getElementById("shareUrl").value;if(url)generateShareQr(url);}}
 function closeShareBox(){document.getElementById("shareBox").classList.remove("show");}
-function copyShareUrl(){const input=document.getElementById("shareUrl");input.select();input.setSelectionRange(0,99999);navigator.clipboard?.writeText(input.value).then(()=>setBox("syntaxSuccess","공유 링크를 복사했습니다.",true)).catch(()=>document.execCommand("copy"));}
+function copyShareUrl(){const input=document.getElementById("shareUrl");input.select();input.setSelectionRange(0,99999);const done=()=>setBox("syntaxSuccess","공유 링크를 복사했습니다.",true);if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(input.value).then(done).catch(()=>{document.execCommand("copy");done()});else{document.execCommand("copy");done();}}
 function loadSharedMapFromHash(){
  const m=location.hash.match(/^#map=([A-Za-z0-9_-]+)$/);if(!m)return;
  try{const b64=m[1].replace(/-/g,"+").replace(/_/g,"/")+"===".slice((m[1].length+3)%4),obj=JSON.parse(decodeURIComponent(escape(atob(b64))));if(!obj||!Array.isArray(obj.walls))return;
@@ -609,7 +641,7 @@ function updateHud(){
  hud.classList.toggle("show",racePhase==="countdown"||racePhase==="racing");
  document.getElementById("hudAlive").textContent=balls.filter(b=>!b.dead).length;
  document.getElementById("hudRank").textContent=finishOrder.length;
- document.getElementById("hudTime").textContent=raceStartedAt?(((performance.now()-raceStartedAt)/1000).toFixed(1)+"s"):"0.0s";
+ document.getElementById("hudTime").textContent=raceStartedAt?(((performance.now()-raceStartedAt)/1000*gameSpeed).toFixed(1)+"s"):"0.0s";
 }
 function makeBall(p,i,total){
  const laneCount=Math.max(1,total), usable=RIGHT_IN-LEFT_IN-34;
@@ -649,6 +681,33 @@ function startCountdown(){
    requestAnimationFrame(loop);
  },800);
 }
+function setGameSpeed(v){
+ gameSpeed=Math.max(.5,Math.min(5,Number(v)||1));
+ document.querySelectorAll('#speedBtns button').forEach(b=>b.classList.toggle('active',Number(b.dataset.speed)===gameSpeed));
+ setBox('syntaxSuccess',`게임 배속 ${gameSpeed}x 적용`,true);
+}
+function openMapPreview(){
+ const data=currentMapData(), fy=getFinishForMap(), label=document.getElementById('mapName').textContent;
+ const pc=document.getElementById('bigMapPreview'), c=pc.getContext('2d');
+ c.clearRect(0,0,pc.width,pc.height);c.fillStyle='#fafafa';c.fillRect(0,0,pc.width,pc.height);
+ c.fillStyle='#e8e9ed';data.forEach(o=>drawObstacle(c,o));
+ c.setLineDash([8,6]);c.strokeStyle='#ff5a5f';c.lineWidth=3;c.beginPath();c.moveTo(40,fy);c.lineTo(CANVAS_W-40,fy);c.stroke();c.setLineDash([]);
+ c.strokeStyle='#727681';c.lineWidth=2;c.setLineDash([7,5]);c.beginPath();c.moveTo(40,START_Y);c.lineTo(CANVAS_W-40,START_Y);c.stroke();c.setLineDash([]);
+ document.getElementById('bigMapInfo').textContent=`${label} · 장애물 ${data.length}개 · 결승선 ${Math.round(fy)}px`;
+ document.getElementById('previewModal').classList.add('show');
+}
+function closeMapPreview(){document.getElementById('previewModal').classList.remove('show')}
+function quickSaveCurrentMap(){
+ let name=currentMap.startsWith('custom:')?currentMap.slice(7):document.getElementById('mapName').textContent;
+ if(!name||name==='Classic'||name==='기본 맵 1') name='내 맵';
+ if(currentMap.startsWith('custom:')){
+   customMaps[name]={walls:cloneMap(currentMapData()),finishY:getFinishForMap()};
+ }else{
+   customMaps[name]={walls:cloneMap(currentMapData()),finishY:getFinishForMap()};
+ }
+ saveMapsToStorage();
+ setBox('syntaxSuccess',`"${name}" 맵을 저장했습니다. 저장 맵에서 바로 사용할 수 있어요.`,true);
+}
 function startGame(){
  clearInterval(countdownTimer);countdownTimer=null;
  let people=parseNames();
@@ -660,6 +719,7 @@ function startGame(){
  startCountdown();
 }
 function resetGame(){
+ setGameSpeed(1);
  clearInterval(countdownTimer);countdownTimer=null;running=false;racePhase="ready";balls=[];finishOrder=[];explosions=[];raceStartedAt=0;hideCountdown();
  document.getElementById("result").classList.remove("show");FINISH_Y=getFinishForMap();draw();parseNames();updateMapPreview(currentMapData(),FINISH_Y,"기본 맵 1");loadSharedMapFromHash();
 }
@@ -670,7 +730,7 @@ function idleTick(){
 requestAnimationFrame(idleTick);
 function markFinished(b,reason="finish"){
  if(!b||b.state!=="racing")return;
- b.state=reason;b.time=raceStartedAt?((performance.now()-raceStartedAt)/1000):0;b.rank=finishOrder.length+1;
+ b.state=reason;b.time=raceStartedAt?((performance.now()-raceStartedAt)/1000*gameSpeed):0;b.rank=finishOrder.length+1;
  finishOrder.push(b);
  if(reason==="finish") beep(760,.06,"triangle",.025);
 }
@@ -707,8 +767,8 @@ function hitsMagma(b,o){
 }
 function loop(t){
  if(!running)return;
- let dt=Math.min(2,(t-last)/16.67);last=t;
- let lw=liveWalls(t/1000);
+ let dt=Math.min(2,(t-last)/16.67)*gameSpeed;last=t;
+ let lw=liveWalls((t-raceStartedAt)/1000*gameSpeed);
  for(const b of balls){
    if(b.state!=="racing")continue;
    b.vy+=.035*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;
@@ -972,7 +1032,7 @@ function editCustomMap(name){
 }
 function closeSaved(){document.getElementById("savedModal").classList.remove("show")}
 function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
-draw();parseNames();
+setGameSpeed(1);draw();parseNames();updateMapPreview(currentMapData(),FINISH_Y,"기본 맵 1");
 </script>
 </body>
 </html>
