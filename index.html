@@ -36,6 +36,23 @@ canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;bord
 .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
 .result{display:none;pointer-events:auto;background:rgba(255,255,255,.96);border:1px solid #ddd;border-radius:20px;padding:22px 30px;text-align:center;box-shadow:0 15px 50px rgba(0,0,0,.12)}
 .result.show{display:block}
+.countdown{display:none;position:absolute;inset:0;align-items:center;justify-content:center;z-index:5;pointer-events:none}
+.countdown.show{display:flex}
+.countdownText{font-size:88px;font-weight:1000;letter-spacing:-4px;text-shadow:0 8px 28px rgba(0,0,0,.16);animation:countPop .72s ease both}
+@keyframes countPop{0%{transform:scale(.55);opacity:0}25%{opacity:1}100%{transform:scale(1);opacity:1}}
+.raceHud{position:absolute;top:12px;left:12px;right:12px;display:none;justify-content:space-between;align-items:flex-start;gap:8px;z-index:4;pointer-events:none}
+.raceHud.show{display:flex}
+.hudBox{background:rgba(255,255,255,.9);backdrop-filter:blur(8px);border:1px solid #e4e5e9;border-radius:12px;padding:8px 11px;font-size:12px;box-shadow:0 5px 18px rgba(30,35,50,.08)}
+.hudBox b{font-size:16px;display:block}
+.rankList{margin-top:14px;text-align:left;max-height:280px;overflow:auto;border-top:1px solid #eee}
+.rankItem{display:flex;gap:9px;align-items:center;padding:8px 2px;border-bottom:1px solid #f0f0f2;font-size:13px}
+.rankNum{width:25px;text-align:center;font-weight:900;color:#777}
+.rankName{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rankState{font-size:11px;color:#999}
+.rankItem.first .rankNum{color:#d69b00;font-size:17px}
+.startLine{stroke:#6b6f78;stroke-width:2;stroke-dasharray:7 5}
+.resultSmall{color:#777;font-size:12px;margin-top:5px}
+@media(max-width:800px){.countdownText{font-size:64px}.raceHud{top:7px;left:7px;right:7px}.hudBox{padding:7px 9px}}
 .result .winner{font-size:30px;font-weight:900;margin-top:4px}
 .stats{display:flex;gap:8px;margin-top:12px}
 .stat{flex:1;background:#f6f7f9;border-radius:12px;padding:10px;text-align:center;font-size:12px;color:#777}
@@ -118,7 +135,20 @@ canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;bord
 <section class="card">
 <div class="stage">
 <canvas id="game" width="760" height="2200"></canvas>
-<div class="overlay"><div id="result" class="result"><div>🏆 WINNER</div><div id="winner" class="winner"></div><button style="margin-top:13px" onclick="startGame()">다시 뽑기</button></div></div>
+<div id="raceHud" class="raceHud">
+  <div class="hudBox"><b id="hudAlive">0</b>생존</div>
+  <div class="hudBox"><b id="hudRank">0</b>등 확정</div>
+  <div class="hudBox"><b id="hudTime">0.0s</b>경과</div>
+</div>
+<div id="countdown" class="countdown"><div id="countdownText" class="countdownText">3</div></div>
+<div class="overlay"><div id="result" class="result">
+  <div>🏆 RACE RESULT</div>
+  <div id="winner" class="winner"></div>
+  <div id="resultSub" class="resultSmall"></div>
+  <div id="rankList" class="rankList"></div>
+  <button style="margin-top:13px" onclick="startGame()">다시 뽑기</button>
+  <button style="margin-top:8px" onclick="resetGame()">초기화</button>
+</div></div>
 </div>
 </section>
 </div>
@@ -177,14 +207,31 @@ canvas{width:100%;display:block;background:#fafafa;border:1px solid #e4e5e9;bord
 const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
 const ecanvas=document.getElementById("editor"),ectx=ecanvas.getContext("2d");
 const CANVAS_W=canvas.width, CANVAS_H=canvas.height;
-const LEFT_IN=58, RIGHT_IN=CANVAS_W-58;
+const LEFT_IN=58, RIGHT_IN=CANVAS_W-58, START_Y=105;
 let FINISH_Y=CANVAS_H-50;
 const FINISH_MIN=100, FINISH_MAX=CANVAS_H-10;
 
 let currentMap="classic",balls=[],running=false,last=0,editorTool="wall",editorWalls=[],selectedIndex=-1,explosions=[],startCount=0;
+let racePhase="ready",countdownValue=0,countdownTimer=null,raceStartedAt=0,finishOrder=[],audioCtx=null;
 let customMaps={};
 try{ customMaps=JSON.parse(localStorage.getItem("formwheel_marble_maps")||"{}"); }catch(e){ customMaps={}; }
 function saveMapsToStorage(){ try{ localStorage.setItem("formwheel_marble_maps",JSON.stringify(customMaps)); }catch(e){} }
+function cloneMap(arr){return JSON.parse(JSON.stringify(arr||[]));}
+function currentMapData(){
+ if(currentMap.startsWith("custom:")){
+   const key=currentMap.slice(7), data=customMaps[key];
+   return data&&data.walls?data.walls:data||[];
+ }
+ if(currentMap==="chaos") return genChaos();
+ return baseMaps[currentMap]||baseMaps.classic;
+}
+function getFinishForMap(){
+ if(currentMap.startsWith("custom:")){
+   const data=customMaps[currentMap.slice(7)];
+   if(data&&typeof data.finishY==='number') return data.finishY;
+ }
+ return CANVAS_H-50;
+}
 
 function setFinishY(v){
  FINISH_Y=Math.max(FINISH_MIN,Math.min(FINISH_MAX,Math.round(Number(v))));
@@ -291,7 +338,7 @@ function parseNames(){
  while((m=re.exec(text))){
    let raw=m[1].trim(), parts=raw.match(/^(.*?)-(\d+)$/), name=raw, n=1;
    if(parts){name=parts[1].trim();n=Math.max(1,Math.min(100,parseInt(parts[2])))}
-   if(name) for(let i=0;i<n;i++) arr.push({name,id:crypto.randomUUID()});
+   if(name) for(let i=0;i<n;i++) arr.push({name,id:(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random())});
  }
  document.getElementById("count").textContent=arr.length;
  return arr;
@@ -308,13 +355,10 @@ document.getElementById("names").addEventListener("input",parseNames);
 
 document.querySelectorAll(".mapBtn").forEach(b=>b.onclick=()=>{
  document.querySelectorAll(".mapBtn").forEach(x=>x.classList.remove("active"));
- b.classList.add("active");currentMap=b.dataset.map;document.getElementById("mapName").textContent=b.textContent;draw();
+ b.classList.add("active");currentMap=b.dataset.map;FINISH_Y=getFinishForMap();document.getElementById("mapName").textContent=b.textContent;draw();
 });
 
-function walls(){
- if(currentMap.startsWith("custom:")) return customMaps[currentMap.slice(7)]||[];
- return baseMaps[currentMap]||baseMaps.classic;
-}
+function walls(){ return currentMapData(); }
 function roundRectPath(context,x,y,w,h,r){
  context.beginPath();
  context.moveTo(x+r,y);
@@ -402,55 +446,121 @@ function draw(){
  ctx.fillStyle="#e8e9ed";
  let nowSec=performance.now()/1000;
  for(const w of liveWalls(nowSec)) drawObstacle(ctx,w);
+ // 출발선
+ ctx.save();ctx.setLineDash([7,5]);ctx.strokeStyle="#727681";ctx.lineWidth=2;
+ ctx.beginPath();ctx.moveTo(40,START_Y);ctx.lineTo(CANVAS_W-40,START_Y);ctx.stroke();ctx.restore();
+ ctx.fillStyle="#727681";ctx.font="700 12px sans-serif";ctx.textAlign="left";ctx.fillText("START",46,START_Y-8);
  // 결승선
  ctx.setLineDash([8,6]);ctx.strokeStyle="#ff5a5f";ctx.lineWidth=3;
  ctx.beginPath();ctx.moveTo(40,FINISH_Y);ctx.lineTo(CANVAS_W-40,FINISH_Y);ctx.stroke();
- ctx.setLineDash([]);
- ctx.fillStyle="#ff5a5f";ctx.font="700 13px sans-serif";ctx.textAlign="left";
- ctx.fillText("FINISH",46,FINISH_Y-8);
- if(!running){
-   ctx.fillStyle="#9b9da4";ctx.font="600 18px sans-serif";ctx.textAlign="center";
-   ctx.fillText("MARBLE READY",canvas.width/2,70);
+ ctx.setLineDash([]);ctx.fillStyle="#ff5a5f";ctx.font="700 13px sans-serif";ctx.textAlign="left";ctx.fillText("FINISH",46,FINISH_Y-8);
+ if(racePhase==="ready"){
+   ctx.fillStyle="#9b9da4";ctx.font="600 18px sans-serif";ctx.textAlign="center";ctx.fillText("MARBLE READY",canvas.width/2,70);
+ }
+ if(racePhase==="finished" && finishOrder.length===0){
+   ctx.fillStyle="#9b9da4";ctx.font="600 18px sans-serif";ctx.textAlign="center";ctx.fillText("NO SURVIVORS",canvas.width/2,70);
  }
  for(const b of balls) drawBall(b);
  explosions.forEach(e=>{
    let t=e.life/e.maxLife;
-   ctx.beginPath();
-   ctx.arc(e.x,e.y,(1-t)*24+6,0,Math.PI*2);
-   ctx.fillStyle=`rgba(255,120,20,${t})`;
-   ctx.fill();
+   ctx.beginPath();ctx.arc(e.x,e.y,(1-t)*24+6,0,Math.PI*2);
+   ctx.fillStyle=`rgba(255,120,20,${t})`;ctx.fill();
  });
+ updateHud();
 }
 function drawBall(b){
  ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fillStyle=b.color;ctx.fill();
  ctx.strokeStyle="rgba(0,0,0,.15)";ctx.stroke();
  if(document.getElementById("labels").checked){
-   ctx.fillStyle="#333";ctx.font="11px sans-serif";ctx.textAlign="center";
-   ctx.fillText(b.name,b.x,b.y-b.r-5);
+   ctx.fillStyle="#333";ctx.font="11px sans-serif";ctx.textAlign="center";ctx.fillText(b.name,b.x,b.y-b.r-5);
  }
 }
+function updateHud(){
+ const hud=document.getElementById("raceHud");
+ if(!hud)return;
+ hud.classList.toggle("show",racePhase==="countdown"||racePhase==="racing");
+ document.getElementById("hudAlive").textContent=balls.filter(b=>!b.dead).length;
+ document.getElementById("hudRank").textContent=finishOrder.length;
+ document.getElementById("hudTime").textContent=raceStartedAt?(((performance.now()-raceStartedAt)/1000).toFixed(1)+"s"):"0.0s";
+}
 function makeBall(p,i,total){
- let angle=Math.random()*Math.PI*2,s=.8+Math.random()*1.4;
- return {name:p.name,x:LEFT_IN+18+Math.random()*((RIGHT_IN-LEFT_IN)-36),y:60+Math.random()*20,
- r:9,
- vx:Math.cos(angle)*s,vy:Math.sin(angle)*s+1,color:`hsl(${(i*360/Math.max(total,1)+Math.random()*25)%360} 70% 55%)`};
+ const laneCount=Math.max(1,total), usable=RIGHT_IN-LEFT_IN-34;
+ const laneW=usable/laneCount;
+ const jitter=Math.min(9,laneW*.18);
+ const baseX=LEFT_IN+17+laneW*(i+.5);
+ return {name:p.name,id:p.id,x:Math.max(LEFT_IN+12,Math.min(RIGHT_IN-12,baseX+(Math.random()-.5)*jitter)),y:START_Y-13,
+   r:9,vx:(Math.random()-.5)*.7,vy:0,color:`hsl(${(i*360/Math.max(total,1)+Math.random()*25)%360} 70% 55%)`,
+   state:"racing",time:null,rank:null};
+}
+function beep(freq=440,duration=.08,type="sine",gain=.035){
+ if(!document.getElementById("sound").checked)return;
+ try{
+   audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
+   if(audioCtx.state==="suspended")audioCtx.resume();
+   const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+   o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(gain,audioCtx.currentTime);
+   g.gain.exponentialRampToValueAtTime(.0001,audioCtx.currentTime+duration);
+   o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+duration);
+ }catch(e){}
+}
+function showCountdownText(text){
+ const box=document.getElementById("countdown"),el=document.getElementById("countdownText");
+ box.classList.add("show");el.textContent=text;el.style.animation="none";void el.offsetWidth;el.style.animation="countPop .72s ease both";
+}
+function hideCountdown(){document.getElementById("countdown").classList.remove("show");}
+function startCountdown(){
+ clearInterval(countdownTimer);
+ racePhase="countdown";running=false;countdownValue=3;showCountdownText("3");beep(520,.09,"sine");draw();
+ countdownTimer=setInterval(()=>{
+   countdownValue--;
+   if(countdownValue>0){showCountdownText(String(countdownValue));beep(520+countdownValue*90,.09,"sine");return;}
+   showCountdownText("GO!");beep(880,.16,"triangle",.05);
+   racePhase="racing";running=true;raceStartedAt=performance.now();last=performance.now();
+   setTimeout(()=>hideCountdown(),430);
+   clearInterval(countdownTimer);countdownTimer=null;
+   requestAnimationFrame(loop);
+ },800);
 }
 function startGame(){
+ clearInterval(countdownTimer);countdownTimer=null;
  let people=parseNames();
  if(!people.length){alert("참가자를 먼저 입력해주세요.");return}
+ FINISH_Y=getFinishForMap();
  balls=people.map((p,i)=>makeBall(p,i,people.length));
- startCount=balls.length;
- explosions=[];
- document.getElementById("result").classList.remove("show");
- running=true;last=performance.now();requestAnimationFrame(loop);
+ startCount=balls.length;finishOrder=[];explosions=[];racePhase="ready";running=false;raceStartedAt=0;
+ document.getElementById("result").classList.remove("show");hideCountdown();
+ startCountdown();
 }
-function resetGame(){running=false;balls=[];explosions=[];document.getElementById("result").classList.remove("show");draw();parseNames()}
-// 게임이 시작되지 않은 동안에도 움직이는 발판/회전 바가 미리보기로 계속 움직이도록 유지
+function resetGame(){
+ clearInterval(countdownTimer);countdownTimer=null;running=false;racePhase="ready";balls=[];finishOrder=[];explosions=[];raceStartedAt=0;hideCountdown();
+ document.getElementById("result").classList.remove("show");FINISH_Y=getFinishForMap();draw();parseNames();
+}
 function idleTick(){
  if(!running) draw();
  requestAnimationFrame(idleTick);
 }
 requestAnimationFrame(idleTick);
+function markFinished(b,reason="finish"){
+ if(!b||b.state!=="racing")return;
+ b.state=reason;b.time=raceStartedAt?((performance.now()-raceStartedAt)/1000):0;b.rank=finishOrder.length+1;
+ finishOrder.push(b);
+ if(reason==="finish") beep(760,.06,"triangle",.025);
+}
+function showResult(){
+ running=false;racePhase="finished";hideCountdown();
+ const winner=finishOrder.find(b=>b.state==="finish");
+ document.getElementById("winner").textContent=winner?winner.name:"생존자 없음";
+ document.getElementById("resultSub").textContent=winner?`1위 · ${winner.time.toFixed(2)}초`:`전원이 탈락했습니다.`;
+ const all=[...finishOrder,...balls.filter(b=>b.state==="dead")];
+ const rank=document.getElementById("rankList");rank.innerHTML="";
+ all.forEach((b,i)=>{
+   const div=document.createElement("div");div.className="rankItem"+(i===0?" first":"");
+   const state=b.state==="finish"?`${b.time.toFixed(2)}초`:"탈락";
+   div.innerHTML=`<span class="rankNum">${i+1}</span><span class="rankName"></span><span class="rankState">${state}</span>`;
+   div.querySelector(".rankName").textContent=b.name;rank.append(div);
+ });
+ document.getElementById("result").classList.add("show");draw();
+}
 function hitsMagma(b,o){
  let angle=o.angle||0;
  if(!angle){
@@ -472,36 +582,35 @@ function loop(t){
  let dt=Math.min(2,(t-last)/16.67);last=t;
  let lw=liveWalls(t/1000);
  for(const b of balls){
+   if(b.state!=="racing")continue;
    b.vy+=.035*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;
    if(b.x<LEFT_IN+b.r){b.x=LEFT_IN+b.r;b.vx=Math.abs(b.vx)*.9}
    if(b.x>RIGHT_IN-b.r){b.x=RIGHT_IN-b.r;b.vx=-Math.abs(b.vx)*.9}
-   if(b.y<b.r){b.y=b.r;b.vy=Math.abs(b.vy)*.9}
+   if(b.y<START_Y+b.r){b.y=START_Y+b.r;b.vy=Math.max(0,b.vy)*.9}
    for(const w of lw){
-     if(w.type==='magma'){ if(hitsMagma(b,w)) b.dead=true; }
-     else if(w.type==='platform'){ collidePlatform(b,w); }
+     if(w.type==='magma'){if(hitsMagma(b,w))b.dead=true;}
+     else if(w.type==='platform')collidePlatform(b,w);
      else collideObstacle(b,w);
    }
  }
- let died=balls.filter(b=>b.dead);
+ // 탈락 처리: 결과 순위에는 탈락 시점이 기록되며, 레이스가 계속된다.
+ let died=balls.filter(b=>b.state==="racing"&&b.dead);
  if(died.length){
-   died.forEach(b=>explosions.push({x:b.x,y:b.y,life:20,maxLife:20}));
-   balls=balls.filter(b=>!b.dead);
+   died.forEach(b=>{b.state="dead";explosions.push({x:b.x,y:b.y,life:24,maxLife:24});beep(150,.05,"sawtooth",.018);});
  }
- explosions.forEach(e=>e.life--);
- explosions=explosions.filter(e=>e.life>0);
- for(let i=0;i<balls.length;i++)for(let j=i+1;j<balls.length;j++)ballCollision(balls[i],balls[j]);
- for(const b of balls){if(Math.abs(b.vx)+Math.abs(b.vy)<.35){b.vx+=(Math.random()-.5)*.6;b.vy+=.7}}
- if(balls.length===0){ finishGame(null); return; }
- if(balls.length===1 && startCount>1){ finishGame(balls[0]); return; }
- // 결승선에 도달한 구슬이 있으면 즉시 종료 (실제로 가장 먼저 결승선에 닿은 구슬이 우승)
- let arrived=balls.filter(b=>b.y+b.r>=FINISH_Y);
- if(arrived.length){
-   let winner=arrived.reduce((a,c)=>c.y>a.y?c:a);
-   finishGame(winner);
-   return;
+ explosions.forEach(e=>e.life--);explosions=explosions.filter(e=>e.life>0);
+ const active=balls.filter(b=>b.state==="racing");
+ for(let i=0;i<active.length;i++)for(let j=i+1;j<active.length;j++)ballCollision(active[i],active[j]);
+ for(const b of active){
+   if(Math.abs(b.vx)+Math.abs(b.vy)<.35){b.vx+=(Math.random()-.5)*.6;b.vy+=.7}
+   b.vx=Math.max(-7,Math.min(7,b.vx));b.vy=Math.max(-8,Math.min(8,b.vy));
+   if(b.y+b.r>=FINISH_Y){markFinished(b,"finish");}
  }
- draw();
- requestAnimationFrame(loop);
+ // 구슬이 결승선을 통과한 순서대로 기록하고, 모두 끝나면 결과를 표시
+ if(finishOrder.length || active.length===0){
+   if(active.length===0 || finishOrder.length>=startCount){showResult();return;}
+ }
+ draw();requestAnimationFrame(loop);
 }
 function collideObstacle(b,o){
  if(o.type==='circle'){
@@ -564,7 +673,14 @@ function collidePlatform(b,o){
 }
 function ballCollision(a,b){
  let dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy),min=a.r+b.r;
- if(d&&d<min){let nx=dx/d,ny=dy/d,over=min-d;a.x-=nx*over/2;a.y-=ny*over/2;b.x+=nx*over/2;b.y+=ny*over/2;let rvx=b.vx-a.vx,rvy=b.vy-a.vy,p=rvx*nx+rvy*ny;if(p<0){a.vx+=p*nx;a.vy+=p*ny;b.vx-=p*nx;b.vy-=p*ny}}}
+ if(d<0.0001){dx=.01;dy=0;d=.01}
+ if(d<min){
+   let nx=dx/d,ny=dy/d,over=min-d;
+   a.x-=nx*over*.51;a.y-=ny*over*.51;b.x+=nx*over*.51;b.y+=ny*over*.51;
+   let rvx=b.vx-a.vx,rvy=b.vy-a.vy,p=rvx*nx+rvy*ny;
+   if(p<0){a.vx+=p*nx;a.vy+=p*ny;b.vx-=p*nx;b.vy-=p*ny}
+ }
+}
 function finishGame(winner){
  running=false;
  document.getElementById("winner").textContent=winner?winner.name:"생존자 없음 (전원 아웃)";
@@ -595,7 +711,7 @@ function toolHint(){
  return "";
 }
 function openEditor(){
- editorWalls=JSON.parse(JSON.stringify(walls().slice(0,140)));
+ editorWalls=cloneMap(walls());
  selectedIndex=-1;updateSelPanel();
  document.getElementById("finishRange").value=FINISH_Y;
  document.getElementById("mapTitle").value="";
@@ -647,6 +763,8 @@ function drawEditor(){
    }
    ectx.restore();
  }
+ ectx.setLineDash([7,5]);ectx.strokeStyle="#727681";ectx.lineWidth=2;
+ ectx.beginPath();ectx.moveTo(40,START_Y);ectx.lineTo(ecanvas.width-40,START_Y);ectx.stroke();
  ectx.setLineDash([8,6]);ectx.strokeStyle="#ff5a5f";ectx.lineWidth=3;
  ectx.beginPath();ectx.moveTo(40,FINISH_Y);ectx.lineTo(ecanvas.width-40,FINISH_Y);ectx.stroke();
  ectx.setLineDash([]);
@@ -694,7 +812,7 @@ ecanvas.addEventListener("click",e=>{
 function clearEditor(){editorWalls=[];selectedIndex=-1;updateSelPanel();drawEditor()}
 function saveCustomMap(){
  let name=document.getElementById("mapTitle").value.trim()||"내 맵";
- customMaps[name]=editorWalls;saveMapsToStorage();
+ customMaps[name]={walls:cloneMap(editorWalls),finishY:FINISH_Y};saveMapsToStorage();
  closeEditor();currentMap="custom:"+name;document.getElementById("mapName").textContent=name;
  document.querySelectorAll(".mapBtn").forEach(x=>x.classList.remove("active"));draw();
 }
@@ -704,9 +822,10 @@ function openSaved(){
  if(!keys.length)box.innerHTML="<div style='color:#777'>저장된 맵이 없습니다.</div>";
  keys.forEach(k=>{
   let div=document.createElement("div");div.className="savedItem";
-  div.innerHTML=`<span>${escapeHtml(k)}</span>`;
+  const saved=customMaps[k]||{}; const obstacleCount=(saved.walls||saved).length||0;
+  div.innerHTML=`<span><b>${escapeHtml(k)}</b><small style="display:block;color:#888;margin-top:2px">장애물 ${obstacleCount}개 · 결승선 ${Math.round(saved.finishY||FINISH_Y)}px</small></span>`;
   let row=document.createElement("span");
-  let use=document.createElement("button");use.textContent="사용";use.onclick=()=>{currentMap="custom:"+k;document.getElementById("mapName").textContent=k;closeSaved();draw()};
+  let use=document.createElement("button");use.textContent="사용";use.onclick=()=>{currentMap="custom:"+k;FINISH_Y=getFinishForMap();document.getElementById("mapName").textContent=k;closeSaved();draw()};
   let edit=document.createElement("button");edit.textContent="수정";edit.onclick=()=>{editCustomMap(k)};
   let del=document.createElement("button");del.textContent="삭제";del.className="danger";del.onclick=()=>{delete customMaps[k];saveMapsToStorage();openSaved()};
   row.append(use,edit,del);div.append(row);box.append(div);
@@ -714,7 +833,9 @@ function openSaved(){
  document.getElementById("savedModal").classList.add("show");
 }
 function editCustomMap(name){
- editorWalls=JSON.parse(JSON.stringify(customMaps[name]||[]));
+ const saved=customMaps[name]||{};
+ editorWalls=cloneMap(saved.walls||saved);
+ if(typeof saved.finishY==='number')FINISH_Y=saved.finishY;
  selectedIndex=-1;updateSelPanel();
  document.getElementById("finishRange").value=FINISH_Y;
  document.getElementById("mapTitle").value=name;
