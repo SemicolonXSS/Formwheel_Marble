@@ -1,0 +1,790 @@
+const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
+const ecanvas=document.getElementById("editor"),ectx=ecanvas.getContext("2d");
+const CANVAS_W=canvas.width, CANVAS_H=canvas.height;
+const LEFT_IN=58, RIGHT_IN=CANVAS_W-58, START_Y=105;
+let FINISH_Y=CANVAS_H-50;
+const FINISH_MIN=100, FINISH_MAX=CANVAS_H-10;
+
+let currentMap="classic",balls=[],running=false,last=0,gameSpeed=1,editorTool="wall",editorWalls=[],selectedIndex=-1,explosions=[],startCount=0;
+let racePhase="ready",countdownValue=0,countdownTimer=null,raceStartedAt=0,raceElapsed=0,finishOrder=[],audioCtx=null;
+let customMaps={};
+try{ customMaps=JSON.parse(localStorage.getItem("formwheel_marble_maps")||"{}"); }catch(e){ customMaps={}; }
+function saveMapsToStorage(){ try{ localStorage.setItem("formwheel_marble_maps",JSON.stringify(customMaps)); }catch(e){} }
+const FIXED_MS=1000/60;let simulationAccumulator=0,randomState=1;
+function seededRandom(){randomState=(Math.imul(randomState,1664525)+1013904223)>>>0;return randomState/4294967296;}
+function validateSharedMap(obj){
+ if(!obj||obj.v!==1||!Array.isArray(obj.walls)||obj.walls.length>500)throw Error("장애물은 최대 500개입니다.");
+ const finish=Number(obj.finishY);if(!Number.isFinite(finish)||finish<FINISH_MIN||finish>FINISH_MAX)throw Error("결승선 좌표가 범위를 벗어났습니다.");
+ for(const o of obj.walls){
+  if(!o||!['rect','circle','magma','platform','spinner'].includes(o.type))throw Error("지원하지 않는 장애물입니다.");
+  for(const [key,value] of Object.entries(o))if(typeof value==='number'&&(!Number.isFinite(value)||Math.abs(value)>10000))throw Error("장애물 수치가 너무 큽니다.");
+  if(!Number.isFinite(o.x)||!Number.isFinite(o.y)||o.x<0||o.y<0||o.x>CANVAS_W||o.y>CANVAS_H)throw Error("장애물 좌표가 범위를 벗어났습니다.");
+  if(o.type==='circle'){if(!Number.isFinite(o.r)||o.r<=0||o.r>CANVAS_W)throw Error("반지름 오류");}
+  else if(!Number.isFinite(o.w)||!Number.isFinite(o.h)||o.w<=0||o.h<=0||o.w>CANVAS_W||o.h>CANVAS_H)throw Error("장애물 크기 오류");
+  if(o.range!=null&&(o.range<0||o.range>CANVAS_W))throw Error("이동 범위 오류");
+  if(o.speed!=null&&Math.abs(o.speed)>20||o.spin!=null&&Math.abs(o.spin)>20)throw Error("장애물 속도 오류");
+ }
+ return obj;
+}
+function cloneMap(arr){return JSON.parse(JSON.stringify(arr||[]));}
+function currentMapData(){
+ if(currentMap.startsWith("custom:")){
+   const key=currentMap.slice(7), data=customMaps[key];
+   return data&&data.walls?data.walls:data||[];
+ }
+ if(currentMap==="chaos") return genChaos();
+ return baseMaps[currentMap]||baseMaps.classic;
+}
+function getFinishForMap(){
+ if(currentMap.startsWith("custom:")){
+   const data=customMaps[currentMap.slice(7)];
+   if(data&&typeof data.finishY==='number') return data.finishY;
+ }
+ return CANVAS_H-50;
+}
+
+function setFinishY(v){
+ FINISH_Y=Math.max(FINISH_MIN,Math.min(FINISH_MAX,Math.round(Number(v))));
+ document.getElementById("finishRange").value=FINISH_Y;
+ draw();
+ if(document.getElementById("editorModal").classList.contains("show")) drawEditor();
+}
+function moveFinish(delta){ setFinishY(FINISH_Y+delta); }
+
+function sideWalls(){
+ return [{type:'rect',x:40,y:90,w:18,h:CANVAS_H-140},{type:'rect',x:CANVAS_W-58,y:90,w:18,h:CANVAS_H-140}];
+}
+
+// 공식맵은 반복 플레이를 위한 고정 코스입니다.
+// 마그마는 모두 기존 대형 장애물보다 훨씬 작게(약 1/4 크기) 배치합니다.
+function genClassic(){
+ const walls=sideWalls();
+ const mid=CANVAS_W/2;
+ // 초반: 기본 지그재그
+ walls.push({type:'rect',x:85,y:180,w:190,h:16});
+ walls.push({type:'rect',x:485,y:280,w:190,h:16});
+ walls.push({type:'circle',x:260,y:390,r:18});
+ walls.push({type:'circle',x:500,y:390,r:18});
+ walls.push({type:'rect',x:110,y:500,w:220,h:16});
+ walls.push({type:'rect',x:430,y:610,w:220,h:16});
+ // 가운데 마그마: 기존보다 4배 작게
+ walls.push({type:'magma',x:mid-28,y:735,w:56,h:8,angle:0});
+ walls.push({type:'rect',x:100,y:850,w:180,h:15});
+ walls.push({type:'rect',x:480,y:950,w:180,h:15});
+ walls.push({type:'circle',x:300,y:1060,r:20});
+ walls.push({type:'circle',x:460,y:1060,r:20});
+ walls.push({type:'rect',x:120,y:1180,w:205,h:15});
+ walls.push({type:'rect',x:435,y:1290,w:205,h:15});
+ // 후반 소형 마그마
+ walls.push({type:'magma',x:175,y:1410,w:52,h:8,angle:0});
+ walls.push({type:'magma',x:535,y:1515,w:52,h:8,angle:0});
+ walls.push({type:'rect',x:95,y:1630,w:190,h:15});
+ walls.push({type:'rect',x:475,y:1740,w:190,h:15});
+ walls.push({type:'circle',x:300,y:1850,r:21});
+ walls.push({type:'circle',x:500,y:1850,r:21});
+ walls.push({type:'rect',x:135,y:1970,w:205,h:15});
+ walls.push({type:'rect',x:425,y:2075,w:205,h:15});
+ return walls;
+}
+
+function genMaze(){
+ const walls=sideWalls();
+ const left=LEFT_IN, right=RIGHT_IN;
+ const gapW=250;
+ // 통로를 기존보다 위쪽으로 배치하고 층 사이 간격도 넉넉하게 확보합니다.
+ const rows=[145,245,345,445,545,645,745,845,945,1045,1145,1245,1345,1445,1545,1645,1745,1845,1945];
+ rows.forEach((y,i)=>{
+   const dir=i%2===0?1:-1;
+   if(dir===1){
+     walls.push({type:'rect',x:left,y,w:(right-left)-gapW,h:16});
+   }else{
+     walls.push({type:'rect',x:left+gapW,y,w:(right-left)-gapW,h:16});
+   }
+   // 통로 중앙을 막지 않는 작은 장애물만 배치
+   if(i%3===1){
+     const cx=dir===1 ? right-gapW/2 : left+gapW/2;
+     walls.push({type:'circle',x:cx,y:y+48,r:14});
+   }
+   // 미로 중간의 작은 마그마도 1/4 크기
+   if(i===9){
+     const mx=dir===1 ? right-gapW+24 : left+gapW-80;
+     walls.push({type:'magma',x:mx,y:y+28,w:56,h:8,angle:0});
+   }
+ });
+ // 아래쪽 통로를 살짝 위로 끌어올리는 보조벽
+ walls.push({type:'rect',x:100,y:2050,w:180,h:15});
+ walls.push({type:'rect',x:480,y:2150,w:180,h:15});
+ return walls;
+}
+
+function genChaos(){
+ const walls=sideWalls();
+ // 공식맵 3: 고정 건틀렛. 랜덤성을 없애고 연속 장애물 공략에 집중합니다.
+ walls.push({type:'rect',x:90,y:165,w:210,h:15});
+ walls.push({type:'magma',x:515,y:260,w:55,h:8,angle:0});
+ walls.push({type:'circle',x:300,y:365,r:18});
+ walls.push({type:'circle',x:465,y:365,r:18});
+ walls.push({type:'rect',x:420,y:470,w:230,h:15,angle:-0.08});
+ walls.push({type:'magma',x:155,y:585,w:58,h:8,angle:0});
+ walls.push({type:'rect',x:100,y:700,w:170,h:15});
+ walls.push({type:'rect',x:490,y:790,w:170,h:15});
+ // 회전/좁은 구간을 표현하는 연속 벽
+ walls.push({type:'rect',x:235,y:900,w:290,h:14,angle:0.12});
+ walls.push({type:'circle',x:160,y:1015,r:17});
+ walls.push({type:'circle',x:590,y:1015,r:17});
+ walls.push({type:'magma',x:345,y:1115,w:60,h:8,angle:0});
+ walls.push({type:'rect',x:100,y:1225,w:215,h:15});
+ walls.push({type:'rect',x:445,y:1335,w:215,h:15});
+ walls.push({type:'magma',x:175,y:1450,w:55,h:8,angle:0});
+ walls.push({type:'magma',x:530,y:1560,w:55,h:8,angle:0});
+ walls.push({type:'circle',x:285,y:1665,r:20});
+ walls.push({type:'circle',x:475,y:1665,r:20});
+ walls.push({type:'rect',x:120,y:1775,w:210,h:15,angle:-0.1});
+ walls.push({type:'rect',x:430,y:1885,w:210,h:15,angle:0.1});
+ // 최종 소형 마그마 구간
+ walls.push({type:'magma',x:330,y:1995,w:62,h:8,angle:0});
+ walls.push({type:'rect',x:150,y:2090,w:190,h:15});
+ return walls;
+}
+
+const baseMaps={classic:genClassic(),maze:genMaze(),chaos:genChaos()};
+
+function parseNames(){
+ let text=document.getElementById("names").value;
+ let arr=[], re=/\[([^\]\n]+)\]/g,m;
+ while((m=re.exec(text))){
+   let raw=m[1].trim(), parts=raw.match(/^(.*?)-(\d+)$/), name=raw, n=1;
+   if(parts){name=parts[1].trim();n=Math.max(1,Math.min(100,parseInt(parts[2])))}
+   if(name) for(let i=0;i<n;i++) arr.push({name,id:(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random())});
+ }
+ document.getElementById("count").textContent=arr.length;
+ return arr;
+}
+function applyNames(){
+ parseNames();
+ let el=document.getElementById("count");
+ el.style.color="#7b61ff";
+ setTimeout(()=>{el.style.color="";},400);
+}
+function sample(){document.getElementById("names").value="[기생충-3], [전랑], [어벤져스-5], [타이타닉-2]";applyNames()}
+function clearNames(){document.getElementById("names").value="";applyNames()}
+document.getElementById("names").addEventListener("input",parseNames);
+
+document.querySelectorAll(".mapBtn").forEach(b=>b.onclick=()=>{
+document.querySelectorAll(".mapBtn").forEach(x=>x.classList.remove("active"));
+b.classList.add("active");currentMap=b.dataset.map;FINISH_Y=getFinishForMap();document.getElementById("mapName").textContent=b.textContent;draw();updateMapPreview(currentMapData(),FINISH_Y,b.textContent);
+});
+
+function walls(){ return currentMapData(); }
+function roundRectPath(context,x,y,w,h,r){
+ context.beginPath();
+ context.moveTo(x+r,y);
+ context.arcTo(x+w,y,x+w,y+h,r);
+ context.arcTo(x+w,y+h,x,y+h,r);
+ context.arcTo(x,y+h,x,y,r);
+ context.arcTo(x,y,x+w,y,r);
+ context.closePath();
+}
+function drawObstacle(context,o){
+ if(o.type==='circle'){
+   context.beginPath();context.arc(o.x,o.y,o.r,0,Math.PI*2);context.fill();
+   return;
+ }
+ if(o.type==='magma'){
+   context.save();
+   let grad=context.createLinearGradient(o.x,o.y,o.x,o.y+o.h);
+   grad.addColorStop(0,'#ffb23d');grad.addColorStop(1,'#c81d1d');
+   context.fillStyle=grad;
+   context.fillRect(o.x,o.y,o.w,o.h);
+   context.fillStyle='#ff8a3d';
+   let spikes=Math.max(2,Math.round(o.w/16));
+   context.beginPath();
+   context.moveTo(o.x,o.y);
+   for(let i=0;i<=spikes;i++){
+     let sx=o.x+(o.w/spikes)*i;
+     let sy=o.y-(i%2===0?4:9);
+     context.lineTo(sx,sy);
+   }
+   context.lineTo(o.x+o.w,o.y);
+   context.closePath();context.fill();
+   context.restore();
+   return;
+ }
+ if(o.type==='platform'){
+   context.save();
+   context.fillStyle='#ffcf5c';
+   roundRectPath(context,o.x,o.y,o.w,o.h,7);
+   context.fill();
+   context.strokeStyle='rgba(180,120,0,.4)';context.lineWidth=1.5;context.stroke();
+   context.fillStyle='rgba(120,70,0,.35)';
+   for(let i=1;i<4;i++){ context.fillRect(o.x+i*(o.w/4)-1.5,o.y+3,3,Math.max(2,o.h-6)); }
+   context.restore();
+   return;
+ }
+ if(o.type==='spinner'){
+   let angle=o.angle||0, cx=o.x+o.w/2, cy=o.y+o.h/2;
+   context.save();
+   context.translate(cx,cy);context.rotate(angle);
+   context.fillStyle='#ff6b6b';
+   roundRectPath(context,-o.w/2,-o.h/2,o.w,o.h,o.h/2);
+   context.fill();
+   context.restore();
+   context.save();
+   context.beginPath();context.arc(cx,cy,6,0,Math.PI*2);context.fillStyle='#8a1f1f';context.fill();
+   context.restore();
+   return;
+ }
+ let angle=o.angle||0;
+ context.save();
+ if(o.deco==='funnel') context.fillStyle='#8ecbff';
+ else if(o.deco==='trampoline') context.fillStyle='#7bd88f';
+ if(!angle){ context.fillRect(o.x,o.y,o.w,o.h); context.restore(); return; }
+ let cx=o.x+o.w/2, cy=o.y+o.h/2;
+ context.translate(cx,cy);context.rotate(angle);
+ context.fillRect(-o.w/2,-o.h/2,o.w,o.h);
+ context.restore();
+}
+// 시간(초)에 따라 움직이는 발판(platform)과 회전하는 바(spinner)의 현재 위치/각도를 계산
+function resolveObstacle(o,tSec){
+ if(o.type==='platform'){
+   let off=Math.sin(tSec*o.speed+(o.phase||0))*o.range;
+   if(o.axis==='y') return Object.assign({},o,{y:o.y+off,_vx:0,_vy:Math.cos(tSec*o.speed+(o.phase||0))*o.speed*o.range});
+   return Object.assign({},o,{x:o.x+off,_vx:Math.cos(tSec*o.speed+(o.phase||0))*o.speed*o.range,_vy:0});
+ }
+ if(o.type==='spinner'){
+   return Object.assign({},o,{angle:(o.angle||0)+tSec*(o.spin||0)});
+ }
+ return o;
+}
+function liveWalls(tSec){ return walls().map(o=>resolveObstacle(o,tSec)); }
+
+// ===== Custom map syntax, preview, save/share =====
+const MAP_SYNTAX_VERSION=1;
+function setBox(id,msg,show=true){const el=document.getElementById(id);if(!el)return;el.textContent=msg||"";el.classList.toggle("show",!!show);}
+function parseMapSyntax(text){
+ const lines=String(text||"").split(/\r?\n/),walls=[],errors=[];let finish=CANVAS_H-50;
+ lines.forEach((raw,idx)=>{
+  const line=raw.replace(/#.*$/,"").trim();if(!line)return;
+  const m=line.match(/^\[([^\]]+)\]$/);if(!m){errors.push(`${idx+1}번째 줄: [ ] 형식이 아닙니다.`);return;}
+  const p=m[1].split(",").map(v=>v.trim()),type=p[0].toLowerCase();
+  const nums=n=>{if(p.length!==n+1)return null;const a=p.slice(1).map(Number);return a.every(Number.isFinite)?a:null;};
+  if(type==="finish"){const a=nums(1);if(!a||a[0]<FINISH_MIN||a[0]>FINISH_MAX){errors.push(`${idx+1}번째 줄: [finish,y] 형식 또는 범위가 잘못되었습니다.`);return;}finish=Math.round(a[0]);return;}
+  if(type==="wall"){const a=nums(4);if(!a||a[2]<=0||a[3]<=0){errors.push(`${idx+1}번째 줄: [wall,x,y,w,h] 형식이 아닙니다.`);return;}walls.push({type:"rect",x:a[0],y:a[1],w:a[2],h:a[3],angle:0});return;}
+  if(type==="circle"){const a=nums(3);if(!a||a[2]<=0){errors.push(`${idx+1}번째 줄: [circle,x,y,r] 형식이 아닙니다.`);return;}walls.push({type:"circle",x:a[0],y:a[1],r:a[2]});return;}
+  if(type==="magma"){const a=nums(4);if(!a||a[2]<=0||a[3]<=0){errors.push(`${idx+1}번째 줄: [magma,x,y,w,h] 형식이 아닙니다.`);return;}walls.push({type:"magma",x:a[0],y:a[1],w:a[2],h:a[3],angle:0});return;}
+  if(type==="gate"){const a=nums(3);if(!a||a[2]<=0){errors.push(`${idx+1}번째 줄: [gate,x,y,gap] 형식이 아닙니다.`);return;}const [cx,cy,gap]=a;walls.push({type:"rect",x:cx-gap/2-14,y:cy-50,w:14,h:100,angle:0},{type:"rect",x:cx+gap/2,y:cy-50,w:14,h:100,angle:0});return;}
+  if(type==="platform"){const a=nums(6);if(!a||a[2]<=0||a[3]<=0||a[4]<0||a[5]<=0){errors.push(`${idx+1}번째 줄: [platform,x,y,w,h,range,speed] 형식이 아닙니다.`);return;}walls.push({type:"platform",x:a[0],y:a[1],w:a[2],h:a[3],axis:"x",range:a[4],speed:a[5],phase:0});return;}
+  if(type==="spinner"){const a=nums(5);if(!a||a[2]<=0||a[3]<=0||a[4]===0){errors.push(`${idx+1}번째 줄: [spinner,x,y,w,h,spin] 형식이 아닙니다.`);return;}walls.push({type:"spinner",x:a[0],y:a[1],w:a[2],h:a[3],angle:0,spin:a[4]});return;}
+  if(type==="trampoline"){const a=nums(4);if(!a||a[2]<=0||a[3]<=0){errors.push(`${idx+1}번째 줄: [trampoline,x,y,w,h] 형식이 아닙니다.`);return;}walls.push({type:"rect",x:a[0],y:a[1],w:a[2],h:a[3],angle:0,deco:"trampoline",bounce:1.4});return;}
+  errors.push(`${idx+1}번째 줄: 알 수 없는 명령 "${p[0]}".`);
+ });
+ walls.forEach((o,i)=>{const x=o.x||0,y=o.y||0,w=o.w||0,h=o.h||0,r=o.r||0;if(o.type==="circle"){if(x-r<0||x+r>CANVAS_W||y-r<0||y+r>CANVAS_H)errors.push(`장애물 ${i+1}: 맵 범위를 벗어납니다.`);}else if(x<0||y<0||x+w>CANVAS_W||y+h>CANVAS_H)errors.push(`장애물 ${i+1}: 맵 범위를 벗어납니다.`);});
+ return {walls,finishY:finish,errors};
+}
+function mapToSyntax(list,finishY){
+ const lines=[`# FormWheel Marble Map v${MAP_SYNTAX_VERSION}`];
+ (list||[]).forEach(o=>{
+  if(o.type==="circle")lines.push(`[circle,${Math.round(o.x)},${Math.round(o.y)},${Math.round(o.r)}]`);
+  else if(o.type==="magma")lines.push(`[magma,${Math.round(o.x)},${Math.round(o.y)},${Math.round(o.w)},${Math.round(o.h)}]`);
+  else if(o.type==="platform")lines.push(`[platform,${Math.round(o.x)},${Math.round(o.y)},${Math.round(o.w)},${Math.round(o.h)},${Math.round(o.range||80)},${Number(o.speed||1).toFixed(2)}]`);
+  else if(o.type==="spinner")lines.push(`[spinner,${Math.round(o.x)},${Math.round(o.y)},${Math.round(o.w)},${Math.round(o.h)},${Number(o.spin||1).toFixed(2)}]`);
+  else if(o.deco==="trampoline")lines.push(`[trampoline,${Math.round(o.x)},${Math.round(o.y)},${Math.round(o.w)},${Math.round(o.h)}]`);
+  else if(o.deco!=="funnel")lines.push(`[wall,${Math.round(o.x)},${Math.round(o.y)},${Math.round(o.w)},${Math.round(o.h)}]`);
+ });
+ lines.push(`[finish,${Math.round(finishY)}]`);return lines.join("\n");
+}
+function openSyntaxEditor(){document.getElementById("syntaxInput").value=mapToSyntax(currentMapData(),getFinishForMap());document.getElementById("syntaxModal").classList.add("show");}
+function closeSyntaxEditor(){document.getElementById("syntaxModal").classList.remove("show");}
+function validateSyntaxOnly(){
+ const p=parseMapSyntax(document.getElementById("syntaxInput").value),el=document.getElementById("syntaxModalError");el.className="errorBox";
+ if(p.errors.length){el.innerHTML=p.errors.slice(0,12).map(escapeHtml).join("<br>")+(p.errors.length>12?`<br>외 ${p.errors.length-12}개`:"");el.classList.add("show");return false;}
+ el.textContent=`문법이 올바릅니다. 장애물 ${p.walls.length}개 · 결승선 ${p.finishY}px`;el.className="successBox show";return true;
+}
+function applySyntaxMap(){
+ const p=parseMapSyntax(document.getElementById("syntaxInput").value),el=document.getElementById("syntaxModalError");el.className="errorBox";
+ if(p.errors.length){el.innerHTML=p.errors.slice(0,12).map(escapeHtml).join("<br>")+(p.errors.length>12?`<br>외 ${p.errors.length-12}개`:"");el.classList.add("show");return;}
+ editorWalls=cloneMap(p.walls);FINISH_Y=p.finishY;document.getElementById("finishRange").value=FINISH_Y;closeSyntaxEditor();document.getElementById("editorModal").classList.add("show");drawEditor();updateMapPreview(editorWalls,FINISH_Y,"문법 적용 미리보기");
+}
+function loadCustomSyntaxExample(){
+ document.getElementById("syntaxInput").value=`# 예시 커스텀 맵
+[wall,120,220,180,16]
+[circle,420,340,22]
+[gate,380,520,80]
+[magma,180,760,140,18]
+[platform,250,980,120,16,90,1.2]
+[spinner,420,1220,140,14,1.0]
+[trampoline,300,1480,100,18]
+[wall,160,1760,200,16]
+[finish,2050]`;document.getElementById("syntaxModal").classList.add("show");
+}
+function editorToSyntax(){document.getElementById("syntaxInput").value=mapToSyntax(editorWalls,FINISH_Y);closeEditor();document.getElementById("syntaxModal").classList.add("show");}
+function updateMapPreview(data,finishY,label){
+ const pc=document.getElementById("mapPreview");if(!pc)return;const pctx=pc.getContext("2d"),sx=pc.width/CANVAS_W,sy=pc.height/CANVAS_H;
+ pctx.clearRect(0,0,pc.width,pc.height);pctx.fillStyle="#fafafa";pctx.fillRect(0,0,pc.width,pc.height);pctx.save();pctx.scale(sx,sy);pctx.fillStyle="#e8e9ed";(data||[]).forEach(o=>drawObstacle(pctx,o));pctx.setLineDash([7,5]);pctx.strokeStyle="#ff5a5f";pctx.lineWidth=4/sx;pctx.beginPath();pctx.moveTo(40,finishY);pctx.lineTo(CANVAS_W-40,finishY);pctx.stroke();pctx.restore();
+ const info=document.getElementById("mapInfo");if(info)info.textContent=`${label||document.getElementById("mapName").textContent} · 장애물 ${(data||[]).length}개 · 결승선 ${Math.round(finishY)}px`;
+}
+function shareCurrentMap(){
+ const d=currentMap.startsWith("custom:")?customMaps[currentMap.slice(7)]:null,obj={v:1,name:d?currentMap.slice(7):document.getElementById("mapName").textContent,walls:cloneMap(d?.walls||currentMapData()),finishY:d?.finishY||getFinishForMap()};
+ try{
+   const raw=JSON.stringify(obj),enc=btoa(unescape(encodeURIComponent(raw))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""),url=location.origin+location.pathname+"#map="+enc;
+   document.getElementById("shareUrl").value=url;document.getElementById("shareBox").classList.add("show");
+   generateShareQr(url);
+   if(navigator.share){navigator.share({title:`FormWheel Marble · ${obj.name}`,text:"FormWheel Marble 맵을 공유합니다!",url}).then(()=>setBox("syntaxSuccess","공유 완료!",true)).catch(()=>{});}
+   else copyShareUrl();
+ }catch(e){setBox("syntaxError","맵 공유 링크 생성에 실패했습니다.",true);}
+}
+function generateShareQr(url){
+ const box=document.getElementById("qrBox"),img=document.getElementById("shareQr");
+ if(!box||!img)return;
+ img.src="https://api.qrserver.com/v1/create-qr-code/?size=440x440&margin=12&data="+encodeURIComponent(url);
+ box.classList.add("show");
+}
+function toggleShareQr(){const box=document.getElementById("qrBox");if(!box)return;box.classList.toggle("show");if(box.classList.contains("show")){const url=document.getElementById("shareUrl").value;if(url)generateShareQr(url);}}
+function closeShareBox(){document.getElementById("shareBox").classList.remove("show");}
+function copyShareUrl(){const input=document.getElementById("shareUrl");input.select();input.setSelectionRange(0,99999);const done=()=>setBox("syntaxSuccess","공유 링크를 복사했습니다.",true);if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(input.value).then(done).catch(()=>{document.execCommand("copy");done()});else{document.execCommand("copy");done();}}
+function loadSharedMapFromHash(){
+ const m=location.hash.match(/^#map=([A-Za-z0-9_-]+)$/);if(!m)return;
+ try{if(m[1].length>150000)throw Error("공유 링크가 너무 큽니다.");const b64=m[1].replace(/-/g,"+").replace(/_/g,"/")+"===".slice((m[1].length+3)%4),obj=JSON.parse(decodeURIComponent(escape(atob(b64))));validateSharedMap(obj);
+ const name=String(obj.name||"공유 맵").slice(0,40);customMaps[name]={walls:cloneMap(obj.walls),finishY:Number(obj.finishY)||CANVAS_H-50};saveMapsToStorage();currentMap="custom:"+name;FINISH_Y=getFinishForMap();document.getElementById("mapName").textContent=name;updateMapPreview(currentMapData(),FINISH_Y,name);setBox("syntaxSuccess",`공유 맵 "${name}"을 불러왔습니다.`,true);history.replaceState(null,"",location.pathname);}catch(e){setBox("syntaxError","공유 맵을 불러올 수 없습니다: "+e.message,true);}
+}
+
+function draw(){
+ ctx.clearRect(0,0,canvas.width,canvas.height);
+ ctx.fillStyle="#fafafa";ctx.fillRect(0,0,canvas.width,canvas.height);
+ ctx.fillStyle="#e8e9ed";
+ let nowSec=raceElapsed;
+ for(const w of liveWalls(nowSec)) drawObstacle(ctx,w);
+ // 출발선
+ ctx.save();ctx.setLineDash([7,5]);ctx.strokeStyle="#727681";ctx.lineWidth=2;
+ ctx.beginPath();ctx.moveTo(40,START_Y);ctx.lineTo(CANVAS_W-40,START_Y);ctx.stroke();ctx.restore();
+ ctx.fillStyle="#727681";ctx.font="700 12px sans-serif";ctx.textAlign="left";ctx.fillText("START",46,START_Y-8);
+ // 결승선
+ ctx.setLineDash([8,6]);ctx.strokeStyle="#ff5a5f";ctx.lineWidth=3;
+ ctx.beginPath();ctx.moveTo(40,FINISH_Y);ctx.lineTo(CANVAS_W-40,FINISH_Y);ctx.stroke();
+ ctx.setLineDash([]);ctx.fillStyle="#ff5a5f";ctx.font="700 13px sans-serif";ctx.textAlign="left";ctx.fillText("FINISH",46,FINISH_Y-8);
+ if(racePhase==="ready"){
+   ctx.fillStyle="#9b9da4";ctx.font="600 18px sans-serif";ctx.textAlign="center";ctx.fillText("MARBLE READY",canvas.width/2,70);
+ }
+ if(racePhase==="finished" && finishOrder.length===0){
+   ctx.fillStyle="#9b9da4";ctx.font="600 18px sans-serif";ctx.textAlign="center";ctx.fillText("NO SURVIVORS",canvas.width/2,70);
+ }
+ for(const b of balls) drawBall(b);
+ explosions.forEach(e=>{
+   let t=e.life/e.maxLife;
+   ctx.beginPath();ctx.arc(e.x,e.y,(1-t)*24+6,0,Math.PI*2);
+   ctx.fillStyle=`rgba(255,120,20,${t})`;ctx.fill();
+ });
+ updateHud();
+}
+function drawBall(b){
+ ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fillStyle=b.color;ctx.fill();
+ ctx.strokeStyle="rgba(0,0,0,.15)";ctx.stroke();
+ if(document.getElementById("labels").checked){
+   ctx.fillStyle="#333";ctx.font="11px sans-serif";ctx.textAlign="center";ctx.fillText(b.name,b.x,b.y-b.r-5);
+ }
+}
+function updateHud(){
+ const hud=document.getElementById("raceHud");
+ if(!hud)return;
+ hud.classList.toggle("show",racePhase==="countdown"||racePhase==="racing");
+ document.getElementById("hudAlive").textContent=balls.filter(b=>!b.dead).length;
+ document.getElementById("hudRank").textContent=finishOrder.length;
+ document.getElementById("hudTime").textContent=raceStartedAt?(raceElapsed.toFixed(1)+"s"):"0.0s";
+}
+function makeBall(p,i,total){
+ const laneCount=Math.max(1,total), usable=RIGHT_IN-LEFT_IN-34;
+ const laneW=usable/laneCount;
+ const jitter=Math.min(9,laneW*.18);
+ const baseX=LEFT_IN+17+laneW*(i+.5);
+ return {name:p.name,id:p.id,x:Math.max(LEFT_IN+12,Math.min(RIGHT_IN-12,baseX+(seededRandom()-.5)*jitter)),y:START_Y-13,
+   r:9,vx:(seededRandom()-.5)*.7,vy:0,color:`hsl(${(i*360/Math.max(total,1)+seededRandom()*25)%360} 70% 55%)`,
+   state:"racing",time:null,rank:null};
+}
+function beep(freq=440,duration=.08,type="sine",gain=.035){
+ if(!document.getElementById("sound").checked)return;
+ try{
+   audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
+   if(audioCtx.state==="suspended")audioCtx.resume();
+   const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+   o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(gain,audioCtx.currentTime);
+   g.gain.exponentialRampToValueAtTime(.0001,audioCtx.currentTime+duration);
+   o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+duration);
+ }catch(e){}
+}
+function showCountdownText(text){
+ const box=document.getElementById("countdown"),el=document.getElementById("countdownText");
+ box.classList.add("show");el.textContent=text;el.style.animation="none";void el.offsetWidth;el.style.animation="countPop .72s ease both";
+}
+function hideCountdown(){document.getElementById("countdown").classList.remove("show");}
+function startCountdown(){
+ clearInterval(countdownTimer);
+ racePhase="countdown";running=false;countdownValue=3;showCountdownText("3");beep(520,.09,"sine");draw();
+ countdownTimer=setInterval(()=>{
+   countdownValue--;
+   if(countdownValue>0){showCountdownText(String(countdownValue));beep(520+countdownValue*90,.09,"sine");return;}
+   showCountdownText("GO!");beep(880,.16,"triangle",.05);
+   racePhase="racing";running=true;raceStartedAt=performance.now();raceElapsed=0;last=raceStartedAt;
+   setTimeout(()=>hideCountdown(),430);
+   clearInterval(countdownTimer);countdownTimer=null;
+   requestAnimationFrame(loop);
+ },800);
+}
+function setGameSpeed(v){
+ gameSpeed=Math.max(.5,Math.min(5,Number(v)||1));
+ document.querySelectorAll('#speedBtns button').forEach(b=>b.classList.toggle('active',Number(b.dataset.speed)===gameSpeed));
+ setBox('syntaxSuccess',`게임 배속 ${gameSpeed}x 적용`,true);
+}
+function openMapPreview(){
+ const data=currentMapData(), fy=getFinishForMap(), label=document.getElementById('mapName').textContent;
+ const pc=document.getElementById('bigMapPreview'), c=pc.getContext('2d');
+ c.clearRect(0,0,pc.width,pc.height);c.fillStyle='#fafafa';c.fillRect(0,0,pc.width,pc.height);
+ c.fillStyle='#e8e9ed';data.forEach(o=>drawObstacle(c,o));
+ c.setLineDash([8,6]);c.strokeStyle='#ff5a5f';c.lineWidth=3;c.beginPath();c.moveTo(40,fy);c.lineTo(CANVAS_W-40,fy);c.stroke();c.setLineDash([]);
+ c.strokeStyle='#727681';c.lineWidth=2;c.setLineDash([7,5]);c.beginPath();c.moveTo(40,START_Y);c.lineTo(CANVAS_W-40,START_Y);c.stroke();c.setLineDash([]);
+ document.getElementById('bigMapInfo').textContent=`${label} · 장애물 ${data.length}개 · 결승선 ${Math.round(fy)}px`;
+ document.getElementById('previewModal').classList.add('show');
+}
+function closeMapPreview(){document.getElementById('previewModal').classList.remove('show')}
+function quickSaveCurrentMap(){
+ let name=currentMap.startsWith('custom:')?currentMap.slice(7):document.getElementById('mapName').textContent;
+ if(!name||name==='Classic'||name==='기본 맵 1') name='내 맵';
+ if(currentMap.startsWith('custom:')){
+   customMaps[name]={walls:cloneMap(currentMapData()),finishY:getFinishForMap()};
+ }else{
+   customMaps[name]={walls:cloneMap(currentMapData()),finishY:getFinishForMap()};
+ }
+ saveMapsToStorage();
+ setBox('syntaxSuccess',`"${name}" 맵을 저장했습니다. 저장 맵에서 바로 사용할 수 있어요.`,true);
+}
+function startGame(){
+ clearInterval(countdownTimer);countdownTimer=null;
+ let people=parseNames();
+ if(!people.length){alert("참가자를 먼저 입력해주세요.");return}
+ FINISH_Y=getFinishForMap();
+ randomState=Number(document.getElementById("raceSeed")?.value)||1;simulationAccumulator=0;
+ balls=people.map((p,i)=>makeBall(p,i,people.length));
+ startCount=balls.length;finishOrder=[];explosions=[];racePhase="ready";running=false;raceStartedAt=0;raceElapsed=0;
+ document.getElementById("result").classList.remove("show");hideCountdown();
+ startCountdown();
+}
+function resetGame(){
+ setGameSpeed(1);
+ clearInterval(countdownTimer);countdownTimer=null;running=false;racePhase="ready";balls=[];finishOrder=[];explosions=[];raceStartedAt=0;raceElapsed=0;hideCountdown();
+ document.getElementById("result").classList.remove("show");FINISH_Y=getFinishForMap();draw();parseNames();updateMapPreview(currentMapData(),FINISH_Y,"기본 맵 1");loadSharedMapFromHash();
+}
+function idleTick(){
+ if(!running) draw();
+ requestAnimationFrame(idleTick);
+}
+requestAnimationFrame(idleTick);
+function markFinished(b,reason="finish"){
+ if(!b||b.state!=="racing")return;
+ b.state=reason;b.time=raceStartedAt?raceElapsed:0;b.rank=finishOrder.length+1;
+ finishOrder.push(b);
+ if(reason==="finish") beep(760,.06,"triangle",.025);
+}
+function showResult(){
+ running=false;racePhase="finished";hideCountdown();
+ const winner=finishOrder.find(b=>b.state==="finish");
+ document.getElementById("winner").textContent=winner?winner.name:"생존자 없음";
+ document.getElementById("resultSub").textContent=winner?`1위 · ${winner.time.toFixed(2)}초`:`전원이 탈락했습니다.`;
+ const all=[...finishOrder,...balls.filter(b=>b.state==="dead")];
+ const rank=document.getElementById("rankList");rank.innerHTML="";
+ all.forEach((b,i)=>{
+   const div=document.createElement("div");div.className="rankItem"+(i===0?" first":"");
+   const state=b.state==="finish"?`${b.time.toFixed(2)}초`:"탈락";
+   div.innerHTML=`<span class="rankNum">${i+1}</span><span class="rankName"></span><span class="rankState">${state}</span>`;
+   div.querySelector(".rankName").textContent=b.name;rank.append(div);
+ });
+ document.getElementById("result").classList.add("show");draw();
+}
+function hitsMagma(b,o){
+ let angle=o.angle||0;
+ if(!angle){
+   let nx=Math.max(o.x,Math.min(b.x,o.x+o.w)), ny=Math.max(o.y,Math.min(b.y,o.y+o.h));
+   let dx=b.x-nx, dy=b.y-ny;
+   return dx*dx+dy*dy<b.r*b.r;
+ }
+ let cx=o.x+o.w/2, cy=o.y+o.h/2;
+ let cos=Math.cos(-angle), sin=Math.sin(-angle);
+ let dx=b.x-cx, dy=b.y-cy;
+ let lx=dx*cos-dy*sin, ly=dx*sin+dy*cos;
+ let hw=o.w/2, hh=o.h/2;
+ let clx=Math.max(-hw,Math.min(lx,hw)), cly=Math.max(-hh,Math.min(ly,hh));
+ let ddx=lx-clx, ddy=ly-cly;
+ return ddx*ddx+ddy*ddy<b.r*b.r;
+}
+function simulationStep(){
+ const dt=1;raceElapsed+=FIXED_MS/1000;
+ let lw=liveWalls(raceElapsed);
+ for(const b of balls){
+   if(b.state!=="racing")continue;
+   b.vy+=.035*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;
+   if(b.x<LEFT_IN+b.r){b.x=LEFT_IN+b.r;b.vx=Math.abs(b.vx)*.9}
+   if(b.x>RIGHT_IN-b.r){b.x=RIGHT_IN-b.r;b.vx=-Math.abs(b.vx)*.9}
+   if(b.y<START_Y+b.r){b.y=START_Y+b.r;b.vy=Math.max(0,b.vy)*.9}
+   for(const w of lw){
+     if(w.type==='magma'){if(hitsMagma(b,w))b.dead=true;}
+     else if(w.type==='platform')collidePlatform(b,w);
+     else collideObstacle(b,w);
+   }
+ }
+ // 탈락 처리: 결과 순위에는 탈락 시점이 기록되며, 레이스가 계속된다.
+ let died=balls.filter(b=>b.state==="racing"&&b.dead);
+ if(died.length){
+   died.forEach(b=>{b.state="dead";explosions.push({x:b.x,y:b.y,life:24,maxLife:24});beep(150,.05,"sawtooth",.018);});
+ }
+ explosions.forEach(e=>e.life--);explosions=explosions.filter(e=>e.life>0);
+ const active=balls.filter(b=>b.state==="racing");
+ for(let i=0;i<active.length;i++)for(let j=i+1;j<active.length;j++)ballCollision(active[i],active[j]);
+ for(const b of active){
+   if(Math.abs(b.vx)+Math.abs(b.vy)<.35){b.vx+=(seededRandom()-.5)*.6;b.vy+=.7}
+   b.vx=Math.max(-7,Math.min(7,b.vx));b.vy=Math.max(-8,Math.min(8,b.vy));
+   if(b.y+b.r>=FINISH_Y){markFinished(b,"finish");}
+ }
+ // 구슬이 결승선을 통과한 순서대로 기록하고, 모두 끝나면 결과를 표시
+ if(finishOrder.length || active.length===0){
+   if(active.length===0 || finishOrder.length>=startCount){showResult();return;}
+ }
+
+}
+function loop(t){
+ if(!running)return;
+ simulationAccumulator+=Math.min(250,Math.max(0,t-last))*gameSpeed;last=t;
+ while(simulationAccumulator+1e-7>=FIXED_MS&&running){simulationAccumulator-=FIXED_MS;simulationStep();}
+ draw();if(running)requestAnimationFrame(loop);
+}
+
+function collideObstacle(b,o){
+ if(o.type==='circle'){
+   let dx=b.x-o.x, dy=b.y-o.y, d=Math.hypot(dx,dy), min=b.r+o.r;
+   if(d && d<min){
+     let nx=dx/d, ny=dy/d, overlap=min-d;
+     b.x+=nx*overlap; b.y+=ny*overlap;
+     let dot=b.vx*nx+b.vy*ny;
+     if(dot<0){ b.vx-=1.8*dot*nx; b.vy-=1.8*dot*ny; }
+     b.vx*=0.94; b.vy*=0.94;
+   }
+   return;
+ }
+ let angle=o.angle||0;
+ if(!angle){
+   let nx=Math.max(o.x,Math.min(b.x,o.x+o.w)), ny=Math.max(o.y,Math.min(b.y,o.y+o.h));
+   let dx=b.x-nx, dy=b.y-ny, d=dx*dx+dy*dy;
+   if(d<b.r*b.r){
+     let bx=o.bounce!=null?o.bounce:.86, by=o.bounce!=null?o.bounce:.84;
+     if(Math.abs(dx)>Math.abs(dy)){ b.vx=-b.vx*bx; b.x+=dx>0?b.r-dx:-(b.r+dx); }
+     else{ b.vy=-b.vy*by; b.y+=dy>0?b.r-dy:-(b.r+dy); }
+   }
+   return;
+ }
+ let cx=o.x+o.w/2, cy=o.y+o.h/2;
+ let cos=Math.cos(-angle), sin=Math.sin(-angle);
+ let dx=b.x-cx, dy=b.y-cy;
+ let lx=dx*cos-dy*sin, ly=dx*sin+dy*cos;
+ let hw=o.w/2, hh=o.h/2;
+ let clx=Math.max(-hw,Math.min(lx,hw)), cly=Math.max(-hh,Math.min(ly,hh));
+ let ddx=lx-clx, ddy=ly-cly, d=ddx*ddx+ddy*ddy;
+ if(d<b.r*b.r){
+   let dist=Math.sqrt(d)||0.0001;
+   let pushLx=ddx/dist*(b.r-dist), pushLy=ddy/dist*(b.r-dist);
+   let cos2=Math.cos(angle), sin2=Math.sin(angle);
+   let wx=pushLx*cos2-pushLy*sin2, wy=pushLx*sin2+pushLy*cos2;
+   b.x+=wx; b.y+=wy;
+   let nlen=Math.hypot(wx,wy)||1, nx=wx/nlen, ny=wy/nlen;
+   let dot=b.vx*nx+b.vy*ny;
+   let factor=o.bounce!=null?(1+o.bounce):1.86;
+   if(dot<0){ b.vx-=factor*dot*nx; b.vy-=factor*dot*ny; }
+   // 회전하는 spinner에 부딪히면 회전 방향으로 살짝 밀려나 예측 불가능하게 튕겨나감
+   if(o.type==='spinner' && o.spin){
+     b.vx+=-ny*o.spin*3; b.vy+=nx*o.spin*3;
+   }
+ }
+}
+// 움직이는 발판(platform): 위에 얹힌 구슬을 발판의 이동 속도만큼 함께 밀어줌
+function collidePlatform(b,o){
+ let nx=Math.max(o.x,Math.min(b.x,o.x+o.w)), ny=Math.max(o.y,Math.min(b.y,o.y+o.h));
+ let dx=b.x-nx, dy=b.y-ny, d=dx*dx+dy*dy;
+ if(d<b.r*b.r){
+   if(Math.abs(dx)>Math.abs(dy)){ b.vx=-b.vx*.86; b.x+=dx>0?b.r-dx:-(b.r+dx); }
+   else{
+     b.vy=-b.vy*.84; b.y+=dy>0?b.r-dy:-(b.r+dy);
+     b.vx+=(o._vx||0)*0.4;
+     b.vy+=(o._vy||0)*0.4;
+   }
+ }
+}
+function ballCollision(a,b){
+ let dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy),min=a.r+b.r;
+ if(d<0.0001){dx=.01;dy=0;d=.01}
+ if(d<min){
+   let nx=dx/d,ny=dy/d,over=min-d;
+   a.x-=nx*over*.51;a.y-=ny*over*.51;b.x+=nx*over*.51;b.y+=ny*over*.51;
+   let rvx=b.vx-a.vx,rvy=b.vy-a.vy,p=rvx*nx+rvy*ny;
+   if(p<0){a.vx+=p*nx;a.vy+=p*ny;b.vx-=p*nx;b.vy-=p*ny}
+ }
+}
+function finishGame(winner){
+ running=false;
+ document.getElementById("winner").textContent=winner?winner.name:"생존자 없음 (전원 아웃)";
+ document.getElementById("result").classList.add("show");
+ draw();
+}
+function hitTest(o,x,y){
+ if(o.type==='circle') return Math.hypot(x-o.x,y-o.y)<=o.r+4;
+ let angle=o.angle||0;
+ if(!angle) return x>=o.x-3 && x<=o.x+o.w+3 && y>=o.y-3 && y<=o.y+o.h+3;
+ let cx=o.x+o.w/2, cy=o.y+o.h/2;
+ let cos=Math.cos(-angle), sin=Math.sin(-angle);
+ let dx=x-cx, dy=y-cy;
+ let lx=dx*cos-dy*sin, ly=dx*sin+dy*cos;
+ return lx>=-o.w/2-3 && lx<=o.w/2+3 && ly>=-o.h/2-3 && ly<=o.h/2+3;
+}
+function toolHint(){
+ if(editorTool==='wall') return "클릭해서 벽을 추가하세요";
+ if(editorTool==='circle') return "클릭해서 원형 못을 추가하세요";
+ if(editorTool==='gate') return "클릭해서 통로(기둥 두 개)를 추가하세요";
+ if(editorTool==='magma') return "클릭해서 마그마를 추가하세요 (닿으면 즉시 아웃)";
+ if(editorTool==='funnel') return "클릭한 지점을 좁은 출구로 하는 깔때기를 추가하세요";
+ if(editorTool==='platform') return "클릭해서 좌우로 움직이는 발판을 추가하세요";
+ if(editorTool==='spinner') return "클릭해서 회전하는 바를 추가하세요 (부딪히면 튕겨나감)";
+ if(editorTool==='trampoline') return "클릭해서 트램폴린을 추가하세요 (크게 튕겨오름)";
+ if(editorTool==='erase') return "클릭해서 삭제하세요";
+ if(editorTool==='select') return "장애물을 클릭해 선택 후 회전/길이를 조정하세요";
+ return "";
+}
+function openEditor(){
+ editorWalls=cloneMap(walls());
+ selectedIndex=-1;updateSelPanel();
+ document.getElementById("finishRange").value=FINISH_Y;
+ document.getElementById("mapTitle").value="";
+ setEditorTool('wall',document.getElementById("wallTool"));
+ document.getElementById("editorModal").classList.add("show");
+}
+function closeEditor(){document.getElementById("editorModal").classList.remove("show")}
+function selectTool(el){document.querySelectorAll(".editorTools button").forEach(x=>x.classList.remove("selected"));if(el)el.classList.add("selected")}
+function setEditorTool(t,el){
+ editorTool=t;
+ if(t!=='select'){selectedIndex=-1;updateSelPanel();}
+ selectTool(el);
+ drawEditor();
+}
+function updateSelPanel(){document.getElementById("selPanel").style.display=selectedIndex>=0?"flex":"none"}
+function rotateSel(deg){
+ if(selectedIndex<0||!editorWalls[selectedIndex])return;
+ let o=editorWalls[selectedIndex];
+ if(o.type==='circle')return;
+ o.angle=(o.angle||0)+deg*Math.PI/180;
+ drawEditor();
+}
+function resizeSel(delta){
+ if(selectedIndex<0||!editorWalls[selectedIndex])return;
+ let o=editorWalls[selectedIndex];
+ if(o.type==='circle'){o.r=Math.max(8,Math.min(60,o.r+delta/2))}
+ else if(o.w>=o.h){o.w=Math.max(20,Math.min(500,o.w+delta))}
+ else {o.h=Math.max(20,Math.min(500,o.h+delta))}
+ drawEditor();
+}
+function deleteSel(){
+ if(selectedIndex<0||!editorWalls[selectedIndex])return;
+ editorWalls.splice(selectedIndex,1);
+ selectedIndex=-1;updateSelPanel();drawEditor();
+}
+function drawEditor(){
+ ectx.clearRect(0,0,ecanvas.width,ecanvas.height);ectx.fillStyle="#fafafa";ectx.fillRect(0,0,ecanvas.width,ecanvas.height);
+ ectx.fillStyle="#c9cbd3";
+ editorWalls.forEach(w=>drawObstacle(ectx,w));
+ if(selectedIndex>=0 && editorWalls[selectedIndex]){
+   let o=editorWalls[selectedIndex];
+   ectx.save();ectx.strokeStyle="#7b61ff";ectx.lineWidth=2.5;ectx.setLineDash([5,4]);
+   if(o.type==='circle'){
+     ectx.beginPath();ectx.arc(o.x,o.y,o.r+5,0,Math.PI*2);ectx.stroke();
+   } else {
+     let angle=o.angle||0, cx=o.x+o.w/2, cy=o.y+o.h/2;
+     ectx.translate(cx,cy);ectx.rotate(angle);
+     ectx.strokeRect(-o.w/2-4,-o.h/2-4,o.w+8,o.h+8);
+   }
+   ectx.restore();
+ }
+ ectx.setLineDash([7,5]);ectx.strokeStyle="#727681";ectx.lineWidth=2;
+ ectx.beginPath();ectx.moveTo(40,START_Y);ectx.lineTo(ecanvas.width-40,START_Y);ectx.stroke();
+ ectx.setLineDash([8,6]);ectx.strokeStyle="#ff5a5f";ectx.lineWidth=3;
+ ectx.beginPath();ectx.moveTo(40,FINISH_Y);ectx.lineTo(ecanvas.width-40,FINISH_Y);ectx.stroke();
+ ectx.setLineDash([]);
+ ectx.fillStyle="#ff5a5f";ectx.font="700 13px sans-serif";ectx.textAlign="left";
+ ectx.fillText("FINISH",46,FINISH_Y-8);
+ ectx.fillStyle="#bbb";ectx.font="13px sans-serif";ectx.textAlign="center";
+ ectx.fillText(toolHint(),ecanvas.width/2,35);
+}
+ecanvas.addEventListener("click",e=>{
+ let r=ecanvas.getBoundingClientRect(),x=(e.clientX-r.left)*ecanvas.width/r.width,y=(e.clientY-r.top)*ecanvas.height/r.height;
+ if(editorTool==="erase"){
+   editorWalls=editorWalls.filter(w=>!hitTest(w,x,y));
+   selectedIndex=-1;updateSelPanel();
+ } else if(editorTool==="wall"){
+   editorWalls.push({type:'rect',x:Math.round(x/10)*10-40,y:Math.round(y/10)*10-8,w:80,h:16,angle:0});
+ } else if(editorTool==="circle"){
+   editorWalls.push({type:'circle',x:Math.round(x/10)*10,y:Math.round(y/10)*10,r:18});
+ } else if(editorTool==="gate"){
+   let cx=Math.round(x/10)*10, cy=Math.round(y/10)*10, gap=60;
+   editorWalls.push({type:'rect',x:cx-gap/2-14,y:cy-50,w:14,h:100,angle:0});
+   editorWalls.push({type:'rect',x:cx+gap/2,y:cy-50,w:14,h:100,angle:0});
+ } else if(editorTool==="magma"){
+   editorWalls.push({type:'magma',x:Math.round(x/10)*10-40,y:Math.round(y/10)*10-9,w:80,h:18,angle:0});
+ } else if(editorTool==="funnel"){
+   // 클릭 지점이 깔때기의 좁은 출구(중앙 아래) 위치가 되도록 좌우 두 팔을 대칭으로 배치
+   let theta=0.55, gap=54, armLen=120, thick=15;
+   let Lx=armLen*Math.sin(theta), Ly=armLen*Math.cos(theta);
+   let leftCx=x-gap/2-Lx/2, leftCy=y-Ly/2;
+   let rightCx=x+gap/2+Lx/2, rightCy=y-Ly/2;
+   editorWalls.push({type:'rect',x:leftCx-thick/2,y:leftCy-armLen/2,w:thick,h:armLen,angle:-theta,deco:'funnel'});
+   editorWalls.push({type:'rect',x:rightCx-thick/2,y:rightCy-armLen/2,w:thick,h:armLen,angle:theta,deco:'funnel'});
+ } else if(editorTool==="platform"){
+   editorWalls.push({type:'platform',x:x-55,y:y-8,w:110,h:16,axis:'x',range:80,speed:1.1,phase:Math.random()*6.28});
+ } else if(editorTool==="spinner"){
+   editorWalls.push({type:'spinner',x:x-65,y:y-7,w:130,h:14,angle:0,spin:(Math.random()<0.5?1:-1)*0.9});
+ } else if(editorTool==="trampoline"){
+   editorWalls.push({type:'rect',x:x-40,y:y-9,w:80,h:18,angle:0,deco:'trampoline',bounce:1.4});
+ } else if(editorTool==="select"){
+   let idx=-1;
+   for(let i=editorWalls.length-1;i>=0;i--){if(hitTest(editorWalls[i],x,y)){idx=i;break}}
+   selectedIndex=idx;updateSelPanel();
+ }
+ drawEditor();
+});
+function clearEditor(){editorWalls=[];selectedIndex=-1;updateSelPanel();drawEditor()}
+function saveCustomMap(){
+let name=document.getElementById("mapTitle").value.trim()||"내 맵";if(name.length>40)name=name.slice(0,40);
+customMaps[name]={walls:cloneMap(editorWalls),finishY:FINISH_Y};saveMapsToStorage();closeEditor();currentMap="custom:"+name;document.getElementById("mapName").textContent=name;document.querySelectorAll(".mapBtn").forEach(x=>x.classList.remove("active"));draw();updateMapPreview(editorWalls,FINISH_Y,name);setBox("syntaxSuccess",`"${name}" 맵을 저장했습니다.`,true);
+}
+function openSaved(){
+ let box=document.getElementById("savedList");box.innerHTML="";
+ let keys=Object.keys(customMaps);
+ if(!keys.length)box.innerHTML="<div style='color:#777'>저장된 맵이 없습니다.</div>";
+ keys.forEach(k=>{
+  let div=document.createElement("div");div.className="savedItem";
+  const saved=customMaps[k]||{}; const obstacleCount=(saved.walls||saved).length||0;
+  div.innerHTML=`<span><b>${escapeHtml(k)}</b><small style="display:block;color:#888;margin-top:2px">장애물 ${obstacleCount}개 · 결승선 ${Math.round(saved.finishY||FINISH_Y)}px</small></span>`;
+  let row=document.createElement("span");
+  let use=document.createElement("button");use.textContent="사용";use.onclick=()=>{currentMap="custom:"+k;FINISH_Y=getFinishForMap();document.getElementById("mapName").textContent=k;closeSaved();draw();updateMapPreview(currentMapData(),FINISH_Y,k)};
+  let edit=document.createElement("button");edit.textContent="수정";edit.onclick=()=>{editCustomMap(k)};
+  let del=document.createElement("button");del.textContent="삭제";del.className="danger";del.onclick=()=>{delete customMaps[k];saveMapsToStorage();openSaved()};
+  row.append(use,edit,del);div.append(row);box.append(div);
+ });
+ document.getElementById("savedModal").classList.add("show");
+}
+function editCustomMap(name){
+ const saved=customMaps[name]||{};
+ editorWalls=cloneMap(saved.walls||saved);
+ if(typeof saved.finishY==='number')FINISH_Y=saved.finishY;
+ selectedIndex=-1;updateSelPanel();
+ document.getElementById("finishRange").value=FINISH_Y;
+ document.getElementById("mapTitle").value=name;
+ setEditorTool('wall',document.getElementById("wallTool"));
+ closeSaved();
+ document.getElementById("editorModal").classList.add("show");
+ drawEditor();
+}
+function closeSaved(){document.getElementById("savedModal").classList.remove("show")}
+function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+setGameSpeed(1);draw();parseNames();updateMapPreview(currentMapData(),FINISH_Y,"기본 맵 1");
