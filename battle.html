@@ -122,9 +122,9 @@ function raceConfig(r){
  return racers;
 }
 function makeCourse(){
- const course=$("raceCourse");course.replaceChildren();
+ const course=$("raceCourse");const canvas=$("mapCanvas");course.replaceChildren();if(canvas)course.appendChild(canvas);
  for(let n=1;n<10;n++){const rail=document.createElement("div");rail.className="rail";rail.style.left=(n*10)+"%";course.appendChild(rail)}
- drawMap();raceData.forEach((b,i)=>{const el=document.createElement("div");el.className="racer "+(i%2===0?"blue":"red");el.textContent=i%2===0?"🔵":"🔴";el.title=(i%2===0?"파란":"빨간")+" 팀 "+(Math.floor(i/2)+1)+"번";el.id="racer"+i;course.appendChild(el)});
+ if($("mapCanvas"))drawMap();raceData.forEach((b,i)=>{const el=document.createElement("div");el.className="racer "+(i%2===0?"blue":"red");el.textContent=i%2===0?"🔵":"🔴";el.title=(i%2===0?"파란":"빨간")+" 팀 "+(Math.floor(i/2)+1)+"번";el.id="racer"+i;course.appendChild(el)});
 }
 function advanceRace(){
  if(!room||!room.startedAt||!raceData.length)return;
