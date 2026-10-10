@@ -71,7 +71,7 @@ $("copy").onclick=async()=>{try{await navigator.clipboard.writeText(code)}catch(
 setInterval(async()=>{
  if(!room)return;
  render();
- if(room.phase!=="playing"||room.host!==id||!raceData.length)return;
+ if(room.phase!=="playing"||!raceData.length)return;
  const first=raceData.reduce((a,b)=>a.finishMs<b.finishMs?a:b);
  if(Date.now()-room.startedAt<first.finishMs)return;
  try{await runTransaction(roomRef(code),v=>{
