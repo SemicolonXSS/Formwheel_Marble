@@ -544,7 +544,7 @@ function simulationStep(){
  }
  // 구슬이 결승선을 통과한 순서대로 기록하고, 모두 끝나면 결과를 표시
  if(finishOrder.length || active.length===0){
-   if(active.length===0 || finishOrder.length>=startCount){showResult();return;}
+   if(active.length===0 || finishOrder.length>=startCount || (typeof window!=="undefined" && window.__fwBattleOwners && finishOrder.some(b=>b.state==="finish"))){showResult();return;}
  }
 
 }
@@ -792,12 +792,14 @@ setGameSpeed(1);draw();parseNames();updateMapPreview(currentMapData(),FINISH_Y,"
 // Embedded 5v5 online battle: reuse the actual Marble physics and official maps.
 if(new URLSearchParams(location.search).get("battleEmbed")==="1"){
  const st=document.createElement("style");st.textContent='#fw-battle-entry,header,.hero,.grid>section:first-child>div:not(:last-child){display:none!important}';document.head.appendChild(st);
- window.addEventListener("message",e=>{if(e.origin!==location.origin||e.data?.type!=="fw-marble-battle-start")return;const data=e.data;if(!["classic","maze","chaos"].includes(data.map)||!Array.isArray(data.players)||data.players.length!==2)return;
+ window.addEventListener("message",e=>{if(e.origin!==location.origin||e.source!==parent)return;
+ if(e.data?.type==="fw-marble-battle-stop"){running=false;clearInterval(countdownTimer);hideCountdown();return}
+ if(e.data?.type!=="fw-marble-battle-start")return;const data=e.data;if(!["classic","maze","chaos"].includes(data.map)||!Array.isArray(data.players)||data.players.length!==2)return;
  currentMap=data.map;document.querySelectorAll(".mapBtn").forEach(b=>b.classList.toggle("active",b.dataset.map===data.map));
  document.getElementById("names").value=data.players.map((key,i)=>"["+(i===0?"BLUE":"RED")+"-"+5+"]").join(", ");
+ window.__fwBattleOwners=data.players;window.__fwBattleRaceKey=data.raceKey;
  document.getElementById("raceSeed").value=String(Number(data.seed)||1);parseNames();startGame();
- window.__fwBattleOwners=data.players;
  });
  const prevShowResult=showResult;
- showResult=function(){prevShowResult();const first=finishOrder.find(b=>b.state==="finish");if(!first)return;const owner=first.name==="BLUE"?window.__fwBattleOwners?.[0]:first.name==="RED"?window.__fwBattleOwners?.[1]:null;if(owner)parent.postMessage({type:"fw-marble-battle-result",winner:owner},location.origin)};
+ showResult=function(){prevShowResult();const first=finishOrder.find(b=>b.state==="finish");const owner=first?.name==="BLUE"?window.__fwBattleOwners?.[0]:first?.name==="RED"?window.__fwBattleOwners?.[1]:null;parent.postMessage({type:"fw-marble-battle-result",winner:owner,reason:owner?"winner":"all-eliminated",raceKey:window.__fwBattleRaceKey},location.origin)};
 }

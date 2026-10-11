@@ -1,121 +1,22 @@
 <!doctype html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Marble Battle · Formwheel</title><link rel="icon" href="https://semicolonxss.github.io/Formwheel/assets/formwheel-favicon.svg"><style>*{box-sizing:border-box}body{font:16px system-ui,sans-serif;margin:0;background:#f5f7fc;color:#26334c}header{padding:16px;background:#fff;border-bottom:1px solid #dfe5ee}a{color:#455cca;text-decoration:none}main{max-width:860px;margin:auto;padding:20px}section{background:#fff;border:1px solid #e0e5ef;border-radius:18px;padding:18px;margin:14px 0;box-shadow:0 3px 15px #23355409}button{border:0;background:#4c62d0;color:white;border-radius:12px;padding:13px 18px;margin:4px;font:inherit;cursor:pointer}button:disabled{opacity:.45}input{border:1px solid #cbd3e2;padding:12px;border-radius:10px;font:inherit;max-width:100%}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.hidden{display:none!important}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}.stat{background:#eef2fd;border-radius:12px;padding:12px}.number{font-size:28px;font-weight:800}.arena{text-align:center;padding:20px 0}.giant{font-size:26px;min-height:110px;width:min(100%,450px)}#info{color:#697186}.choices{display:grid;grid-template-columns:1fr 1fr;gap:8px}.wheel{font-size:60px;margin:20px}.track{height:75px;border:3px solid #98a7ce;border-radius:14px;position:relative;margin:26px 0;background:repeating-linear-gradient(90deg,#e6ecff,#e6ecff 32px,#f6f8ff 32px,#f6f8ff 64px)}#ball{position:absolute;top:15px;left:0;font-size:30px}.finish{position:absolute;right:0;top:14px;font-size:30px}.beat{font-size:65px;min-height:100px}#status{color:#854e18;white-space:pre-wrap} .arena{overflow:hidden}#raceCourse{position:relative;max-width:520px;height:560px;margin:16px auto;border:4px solid #90a6cf;border-radius:24px;background:repeating-linear-gradient(180deg,#e9eefb 0px,#e9eefb 69px,#f7f9ff 70px,#f7f9ff 75px);overflow:hidden}#raceCourse:before{content:"START";position:absolute;top:8px;left:12px;font-size:12px;color:#62749d}#raceCourse:after{content:"🏁 FINISH";position:absolute;bottom:7px;right:12px;font-weight:bold;color:#31436d}.racer{position:absolute;width:30px;height:30px;display:grid;place-items:center;border-radius:50%;font-size:20px;box-shadow:0 3px 9px #18254450;z-index:3;transition:none}.racer.blue{background:#dbeafe;border:2px solid #3478df}.racer.red{background:#fee2e2;border:2px solid #ef5555}.racer.winner{box-shadow:0 0 0 5px #facc15,0 0 22px #f59e0b}.rail{position:absolute;top:0;bottom:0;border-left:2px dashed #afc1e0;opacity:.7} </style></head><body><header><a href="./index.html">← Marble 일반 모드</a> · <a href="https://semicolonxss.github.io/Formwheel/">Formwheel Hub</a></header><main><h1>🎱 Marble 레이스 배틀</h1><p>각 플레이어가 구슬 5개씩 출전! 총 10개 구슬이 같은 내리막 코스를 자동으로 달리고, 가장 먼저 도착한 구슬의 팀이 승리합니다.</p><section id="join"><div class="row"><input id="nick" maxlength="14" placeholder="닉네임"><button id="create">방 만들기</button><input id="codeInput" maxlength="6" placeholder="방 코드 6자리"><button id="joinBtn">방 참가</button></div><p id="status">방 코드를 친구에게 알려주세요.</p></section><section id="roomSection" class="hidden"><div class="row"><b>방 코드: <span id="code"></span></b><button id="copy">코드 복사</button><button id="leave">나가기</button></div><div class="stats"><div class="stat">내 점수<div class="number" id="myPoints">0</div></div><div class="stat">상대 점수<div class="number" id="otherPoints">0</div></div><div class="stat">남은 시간<div class="number" id="timer"></div></div><p id="opponent">상대 대기 중…</p><div id="mapPicker" style="margin:14px 0;padding:14px;border:1px solid #cad5ef;border-radius:12px"><label for="mapSelect"><b>🗺️ 배틀 맵 (방장만 선택)</b></label><select id="mapSelect" style="display:block;max-width:100%;width:300px;padding:12px;margin:8px 0;border:1px solid #a7b7dd;border-radius:9px"><option value="classic">클래식</option><option value="maze">미로</option><option value="chaos">건틀렛</option></select><div id="selectedMap">선택된 맵: 클래식</div></div><button id="start" class="hidden">배틀 시작</button><p id="message"></p></section><section id="gameSection" class="hidden"><h2>🎱 실제 Marble 코스 · 5 vs 5</h2><p>기존 Marble 물리 엔진을 사용하며 같은 맵과 시드로 출발합니다.</p><iframe id="marbleGame" title="Marble 실제 구슬 시뮬레이터" src="./index.html?battleEmbed=1" style="display:block;width:100%;height:850px;border:1px solid #ccd6ea;border-radius:12px"></iframe></section></main><script type="module">
+import {battleSession} from "./assets/battle-session.js";
 import{initializeApp}from"https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-import{getDatabase,ref,get,onValue,runTransaction}from"https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+import{getDatabase,ref,get,onValue,runTransaction,serverTimestamp}from"https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
 import{getAuth,signInAnonymously}from"https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 const app=initializeApp({"apiKey":"AIzaSyBreTSe1m0-xlbF4aupnU5isRZCihR25IE","authDomain":"formwheel.firebaseapp.com","databaseURL":"https://formwheel-default-rtdb.firebaseio.com","projectId":"formwheel","appId":"1:431583088241:web:74e0e34ea1e3e1170c55d0"}),db=getDatabase(app),auth=getAuth(app),root="formwheelBattles/marble",duration=120000;
-const $=x=>document.getElementById(x),id=crypto.randomUUID();
+const session=battleSession("marble",db);
+const $=x=>document.getElementById(x),id=session.id;
 let room=null,code="",unsub=null,busy=false,points=0,sent=-1,lastSent=0,finished=false;let raceKey="",raceData=[];const mapTitles={classic:"클래식",maze:"미로",chaos:"건틀렛"};
 const roomRef=c=>ref(db,root+"/"+c),nickname=()=>($("nick").value.trim().slice(0,14)||"플레이어");
-async function authenticate(){if(!auth.currentUser)await signInAnonymously(auth)}
+async function authenticate(){await auth.authStateReady();if(!auth.currentUser)await signInAnonymously(auth)}
 function error(e){$("status").textContent="연결 오류: "+(e.message||String(e));console.error(e)}
-function remaining(){return room?.startedAt?Math.max(0,duration-(Date.now()-room.startedAt)):duration}
+function remaining(){return room?.startedAt?Math.max(0,duration-(session.now()-room.startedAt)):duration}
 function running(){return room?.phase==="playing"&&remaining()>0}
-const CANVAS_W=760,CANVAS_H=2400,LEFT_IN=58,RIGHT_IN=CANVAS_W-58;
-function sideWalls(){
- return [{type:'rect',x:40,y:90,w:18,h:CANVAS_H-140},{type:'rect',x:CANVAS_W-58,y:90,w:18,h:CANVAS_H-140}];
-}
-
-// 공식맵은 반복 플레이를 위한 고정 코스입니다.
-// 마그마는 모두 기존 대형 장애물보다 훨씬 작게(약 1/4 크기) 배치합니다.
-function genClassic(){
- const walls=sideWalls();
- const mid=CANVAS_W/2;
- // 초반: 기본 지그재그
- walls.push({type:'rect',x:85,y:180,w:190,h:16});
- walls.push({type:'rect',x:485,y:280,w:190,h:16});
- walls.push({type:'circle',x:260,y:390,r:18});
- walls.push({type:'circle',x:500,y:390,r:18});
- walls.push({type:'rect',x:110,y:500,w:220,h:16});
- walls.push({type:'rect',x:430,y:610,w:220,h:16});
- // 가운데 마그마: 기존보다 4배 작게
- walls.push({type:'magma',x:mid-28,y:735,w:56,h:8,angle:0});
- walls.push({type:'rect',x:100,y:850,w:180,h:15});
- walls.push({type:'rect',x:480,y:950,w:180,h:15});
- walls.push({type:'circle',x:300,y:1060,r:20});
- walls.push({type:'circle',x:460,y:1060,r:20});
- walls.push({type:'rect',x:120,y:1180,w:205,h:15});
- walls.push({type:'rect',x:435,y:1290,w:205,h:15});
- // 후반 소형 마그마
- walls.push({type:'magma',x:175,y:1410,w:52,h:8,angle:0});
- walls.push({type:'magma',x:535,y:1515,w:52,h:8,angle:0});
- walls.push({type:'rect',x:95,y:1630,w:190,h:15});
- walls.push({type:'rect',x:475,y:1740,w:190,h:15});
- walls.push({type:'circle',x:300,y:1850,r:21});
- walls.push({type:'circle',x:500,y:1850,r:21});
- walls.push({type:'rect',x:135,y:1970,w:205,h:15});
- walls.push({type:'rect',x:425,y:2075,w:205,h:15});
- return walls;
-}
-
-function genMaze(){
- const walls=sideWalls();
- const left=LEFT_IN, right=RIGHT_IN;
- const gapW=250;
- // 통로를 기존보다 위쪽으로 배치하고 층 사이 간격도 넉넉하게 확보합니다.
- const rows=[145,245,345,445,545,645,745,845,945,1045,1145,1245,1345,1445,1545,1645,1745,1845,1945];
- rows.forEach((y,i)=>{
-   const dir=i%2===0?1:-1;
-   if(dir===1){
-     walls.push({type:'rect',x:left,y,w:(right-left)-gapW,h:16});
-   }else{
-     walls.push({type:'rect',x:left+gapW,y,w:(right-left)-gapW,h:16});
-   }
-   // 통로 중앙을 막지 않는 작은 장애물만 배치
-   if(i%3===1){
-     const cx=dir===1 ? right-gapW/2 : left+gapW/2;
-     walls.push({type:'circle',x:cx,y:y+48,r:14});
-   }
-   // 미로 중간의 작은 마그마도 1/4 크기
-   if(i===9){
-     const mx=dir===1 ? right-gapW+24 : left+gapW-80;
-     walls.push({type:'magma',x:mx,y:y+28,w:56,h:8,angle:0});
-   }
- });
- // 아래쪽 통로를 살짝 위로 끌어올리는 보조벽
- walls.push({type:'rect',x:100,y:2050,w:180,h:15});
- walls.push({type:'rect',x:480,y:2150,w:180,h:15});
- return walls;
-}
-
-function genChaos(){
- const walls=sideWalls();
- // 공식맵 3: 고정 건틀렛. 랜덤성을 없애고 연속 장애물 공략에 집중합니다.
- walls.push({type:'rect',x:90,y:165,w:210,h:15});
- walls.push({type:'magma',x:515,y:260,w:55,h:8,angle:0});
- walls.push({type:'circle',x:300,y:365,r:18});
- walls.push({type:'circle',x:465,y:365,r:18});
- walls.push({type:'rect',x:420,y:470,w:230,h:15,angle:-0.08});
- walls.push({type:'magma',x:155,y:585,w:58,h:8,angle:0});
- walls.push({type:'rect',x:100,y:700,w:170,h:15});
- walls.push({type:'rect',x:490,y:790,w:170,h:15});
- // 회전/좁은 구간을 표현하는 연속 벽
- walls.push({type:'rect',x:235,y:900,w:290,h:14,angle:0.12});
- walls.push({type:'circle',x:160,y:1015,r:17});
- walls.push({type:'circle',x:590,y:1015,r:17});
- walls.push({type:'magma',x:345,y:1115,w:60,h:8,angle:0});
- walls.push({type:'rect',x:100,y:1225,w:215,h:15});
- walls.push({type:'rect',x:445,y:1335,w:215,h:15});
- walls.push({type:'magma',x:175,y:1450,w:55,h:8,angle:0});
- walls.push({type:'magma',x:530,y:1560,w:55,h:8,angle:0});
- walls.push({type:'circle',x:285,y:1665,r:20});
- walls.push({type:'circle',x:475,y:1665,r:20});
- walls.push({type:'rect',x:120,y:1775,w:210,h:15,angle:-0.1});
- walls.push({type:'rect',x:430,y:1885,w:210,h:15,angle:0.1});
- // 최종 소형 마그마 구간
- walls.push({type:'magma',x:330,y:1995,w:62,h:8,angle:0});
- walls.push({type:'rect',x:150,y:2090,w:190,h:15});
- return walls;
-}
-
-const baseMaps={classic:genClassic(),maze:genMaze(),chaos:genChaos()};
-
-
-function drawMap(){const canvas=$("mapCanvas"),ctx=canvas.getContext("2d"),selected=room?.map||"classic";if(!ctx)return;ctx.clearRect(0,0,760,2400);for(const o of baseMaps[selected]||baseMaps.classic){ctx.fillStyle=o.type==="magma"?"#ef7937":"#a4b7d8";if(o.type==="circle"){ctx.beginPath();ctx.arc(o.x,o.y,o.r,0,Math.PI*2);ctx.fill()}else{ctx.save();ctx.translate(o.x+(o.w||0)/2,o.y+(o.h||0)/2);ctx.rotate(o.angle||0);ctx.fillRect(-(o.w||0)/2,-(o.h||0)/2,o.w,o.h);ctx.restore()}}}
 $("mapSelect").addEventListener("change",async e=>{if(room?.host!==id||room.phase!=="waiting")return;const chosen=e.target.value;if(!mapTitles[chosen])return;try{await runTransaction(roomRef(code),v=>v&&v.host===id&&v.phase==="waiting"?{...v,map:chosen}:undefined,{applyLocally:false})}catch(err){$("message").textContent="맵 변경 실패: "+err.message}});
 const marbleFrame=$("marbleGame");let activeRace="";
-function launchEmbedded(){if(!room||room.phase!=="playing")return;const key=room.startedAt+"-"+room.seed+"-"+(room.map||"classic");if(activeRace===key)return;activeRace=key;const players=Object.keys(room.players||{}).sort();marbleFrame.contentWindow?.postMessage({type:"fw-marble-battle-start",map:room.map||"classic",seed:room.seed,players,startedAt:room.startedAt},"*")}
+function launchEmbedded(){if(!room||room.phase!=="playing")return;const key=room.startedAt+"-"+room.seed+"-"+(room.map||"classic");if(activeRace===key)return;activeRace=key;const players=Object.keys(room.players||{}).sort();marbleFrame.contentWindow?.postMessage({type:"fw-marble-battle-start",map:room.map||"classic",seed:room.seed,players,startedAt:room.startedAt,raceKey:key},location.origin)}
 marbleFrame.addEventListener("load",()=>{activeRace="";launchEmbedded()});
-window.addEventListener("message",async e=>{if(e.origin!==location.origin||e.source!==marbleFrame.contentWindow||e.data?.type!=="fw-marble-battle-result"||!room||room.phase!=="playing")return;const who=e.data.winner;try{await runTransaction(roomRef(code),v=>{if(!v||v.phase!=="playing"||!v.players?.[who])return;return {...v,winner:who,phase:"finished",finishedAt:Date.now()}},{applyLocally:false})}catch(err){$("message").textContent=err.message}});
+window.addEventListener("message",async e=>{if(e.origin!==location.origin||e.source!==marbleFrame.contentWindow||e.data?.type!=="fw-marble-battle-result"||!room||room.phase!=="playing")return;const who=e.data.winner;if(e.data.raceKey!==activeRace||remaining()===0)return;try{await runTransaction(roomRef(code),v=>{if(!v||v.phase!=="playing"||(!v.players?.[who]&&e.data.reason!=="all-eliminated"))return;return {...v,winner:who||null,finishReason:who?"winner":"all-eliminated",phase:"finished",finishedAt:serverTimestamp()}},{applyLocally:false})}catch(err){$("message").textContent=err.message}});
 function render(){
  if(!room)return;
  const players=Object.entries(room.players||{});$("mapSelect").value=mapTitles[room.map]?room.map:"classic";$("mapSelect").disabled=room.host!==id||room.phase!=="waiting";$("selectedMap").textContent="선택된 맵: "+(mapTitles[room.map]||"클래식");const me=room.players?.[id],other=players.find(([k])=>k!==id)?.[1];
@@ -133,14 +34,22 @@ function render(){
  launchEmbedded();
  if(room.phase==="playing")$("message").textContent="10개의 구슬 중 첫 완주 구슬이 속한 팀이 우승!";
  else if(room.winner){$("message").textContent=room.winner===id?"🏆 승리! 내 구슬이 가장 먼저 들어왔어요!":"상대 팀 승리! 상대 구슬이 먼저 들어왔어요."}
- else $("message").textContent="레이스가 종료됐어요.";
+ else $("message").textContent=room.finishReason==="all-eliminated"?"🤝 모든 구슬이 탈락해 무승부입니다.":room.finishReason==="timeout"?"🤝 제한 시간 종료 · 무승부입니다.":"레이스가 종료됐어요.";
+ if(room.phase==="finished")marbleFrame.contentWindow?.postMessage({type:"fw-marble-battle-stop"},location.origin);
 }
 
-function observe(c){unsub?.();code=c;$("join").classList.add("hidden");$("roomSection").classList.remove("hidden");unsub=onValue(roomRef(c),s=>{room=s.val();if(!room||!room.players?.[id]){alert("방이 종료되었거나 퇴장 처리되었습니다.");location.href="./index.html";return}render()},e=>$("message").textContent="실시간 연결 오류: "+e.message)}
-$("create").onclick=async()=>{if(busy)return;busy=true;try{await authenticate();for(let i=0;i<6;i++){const c=Array.from(crypto.getRandomValues(new Uint8Array(6)),v=>"ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[v%32]).join("");const tx=await runTransaction(roomRef(c),v=>v===null?{host:id,phase:"waiting",createdAt:Date.now(),map:"classic",players:{[id]:{name:nickname(),score:0}}}:undefined,{applyLocally:false});if(tx.committed){observe(c);return}}throw Error("방 생성 실패")}catch(e){error(e)}finally{busy=false}};
-$("joinBtn").onclick=async()=>{if(busy)return;busy=true;try{await authenticate();const c=$("codeInput").value.replace(/\s|-/g,"").toUpperCase();if(!/^[A-Z0-9]{6}$/.test(c))throw Error("6자리 코드를 입력해주세요.");const target=roomRef(c),initial=(await get(target)).val();if(!initial)throw Error("방이 없어요. 코드를 확인해주세요.");if(initial.phase!=="waiting")throw Error("이미 시작했거나 종료된 방이에요.");if(Object.keys(initial.players||{}).length>=2)throw Error("방이 가득 찼어요.");const tx=await runTransaction(target,current=>{const v=current===null?initial:current;if(!v||v.phase!=="waiting"||!v.players||Object.keys(v.players).length>=2)return;return {...v,players:{...v.players,[id]:{name:nickname(),score:0}}}},{applyLocally:false});if(!tx.committed)throw Error("방 참가가 취소됐어요. 다시 시도해주세요.");observe(c)}catch(e){error(e)}finally{busy=false}};
-$("start").onclick=async()=>{if(room?.host!==id||room.phase!=="waiting"||Object.keys(room.players||{}).length!==2)return;try{await runTransaction(roomRef(code),v=>{if(!v||v.phase!=="waiting"||v.host!==id||Object.keys(v.players||{}).length!==2)return;return {...v,phase:"playing",map:mapTitles[v.map]?v.map:"classic",startedAt:Date.now(),seed:crypto.getRandomValues(new Uint32Array(1))[0]}},{applyLocally:false})}catch(e){$("message").textContent=e.message}};
-$("leave").onclick=async()=>{try{await runTransaction(roomRef(code),v=>{if(!v||!v.players?.[id])return;const players={...v.players};delete players[id];if(!Object.keys(players).length)return null;return {...v,host:v.host===id?Object.keys(players)[0]:v.host,phase:v.phase==="playing"?"finished":v.phase,players}},{applyLocally:false})}finally{location.href="./index.html"}};
+function observe(c){unsub?.();code=c;session.remember(c);$("join").classList.add("hidden");$("roomSection").classList.remove("hidden");unsub=onValue(roomRef(c),s=>{room=s.val();if(!room||!room.players?.[id]){session.clear();alert("방이 종료되었거나 퇴장 처리되었습니다.");location.href="./index.html";return}render()},e=>$("message").textContent="실시간 연결 오류: "+e.message)}
+$("create").onclick=async()=>{if(busy)return;busy=true;try{await authenticate();for(let i=0;i<6;i++){const c=Array.from(crypto.getRandomValues(new Uint8Array(6)),v=>"ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[v%32]).join("");const tx=await runTransaction(roomRef(c),v=>v===null?{host:id,phase:"waiting",createdAt:session.now(),map:"classic",players:{[id]:{name:nickname(),score:0}}}:undefined,{applyLocally:false});if(tx.committed){observe(c);return}}throw Error("방 생성 실패")}catch(e){error(e)}finally{busy=false}};
+$("joinBtn").onclick=async()=>{if(busy)return;busy=true;try{await authenticate();const c=$("codeInput").value.replace(/\s|-/g,"").toUpperCase();if(!/^[A-Z0-9]{6}$/.test(c))throw Error("6자리 코드를 입력해주세요.");const target=roomRef(c),initial=(await get(target)).val();if(!initial)throw Error("방이 없어요. 코드를 확인해주세요.");if(initial.players?.[id]){observe(c);return}if(initial.phase!=="waiting")throw Error("이미 시작했거나 종료된 방이에요.");if(Object.keys(initial.players||{}).length>=2)throw Error("방이 가득 찼어요.");const tx=await runTransaction(target,current=>{if(current===null)return null;const v=current;if(!v||v.phase!=="waiting"||!v.players||Object.keys(v.players).length>=2)return;return {...v,players:{...v.players,[id]:{name:nickname(),score:0}}}},{applyLocally:false});if(!tx.committed||!tx.snapshot.val()?.players?.[id])throw Error("방이 종료되었거나 참가가 취소됐어요. 코드를 확인해 주세요.");observe(c)}catch(e){error(e)}finally{busy=false}};
+$("start").onclick=async()=>{if(room?.host!==id||room.phase!=="waiting"||Object.keys(room.players||{}).length!==2)return;try{await runTransaction(roomRef(code),v=>{if(!v||v.phase!=="waiting"||v.host!==id||Object.keys(v.players||{}).length!==2)return;return {...v,phase:"playing",map:mapTitles[v.map]?v.map:"classic",startedAt:serverTimestamp(),seed:crypto.getRandomValues(new Uint32Array(1))[0]}},{applyLocally:false})}catch(e){$("message").textContent=e.message}};
+$("leave").onclick=async()=>{try{await runTransaction(roomRef(code),v=>{if(!v||!v.players?.[id])return;const players={...v.players};delete players[id];if(!Object.keys(players).length)return null;return {...v,host:v.host===id?Object.keys(players)[0]:v.host,phase:v.phase==="playing"?"finished":v.phase,players}},{applyLocally:false});session.clear();location.href="./index.html"}catch(e){$("message").textContent="퇴장 실패: "+e.message}};
 $("copy").onclick=async()=>{try{await navigator.clipboard.writeText(code)}catch(e){prompt("방 코드",code)}};
-setInterval(()=>{if(room)render()},400);
+let finishing=false;
+setInterval(async()=>{
+ if(!room)return;render();
+ if(room.phase==="playing"&&remaining()===0&&!finishing){finishing=true;try{
+ await runTransaction(roomRef(code),v=>{if(!v||v.phase!=="playing"||!v.players?.[id]||session.now()<v.startedAt+duration)return;return {...v,phase:"finished",finishReason:"timeout",finishedAt:serverTimestamp()}},{applyLocally:false});
+ }catch(e){$("message").textContent="종료 저장 실패: "+e.message}finally{finishing=false}}
+},500);
+(async()=>{if(!session.code)return;busy=true;try{await authenticate();const saved=session.code,snap=await get(roomRef(saved));if(snap.val()?.players?.[id])observe(saved);else session.clear()}catch(e){error(e)}finally{busy=false}})();
 </script></body></html>
