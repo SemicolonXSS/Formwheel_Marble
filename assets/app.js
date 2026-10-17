@@ -484,6 +484,7 @@ function markFinished(b,reason="finish"){
  if(reason==="finish") beep(760,.06,"triangle",.025);
 }
 function showResult(){
+  if(window.opener && !window.opener.closed)window.opener.postMessage({type:"formwheel-spotlight-result-v1",project:"Marble",value:1},"https://semicolonxss.github.io");
  running=false;racePhase="finished";hideCountdown();
  const winner=finishOrder.find(b=>b.state==="finish");
  document.getElementById("winner").textContent=winner?winner.name:"생존자 없음";
