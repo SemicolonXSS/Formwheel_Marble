@@ -154,10 +154,10 @@ function parseNames(){
  let arr=[], re=/\[([^\]\n]+)\]/g,m;
  while((m=re.exec(text))){
    let raw=m[1].trim(), parts=raw.match(/^(.*?)-(\d+)$/), name=raw, n=1;
-   if(parts){name=parts[1].trim();n=Math.max(1,Math.min(100,parseInt(parts[2])))}
-   if(name) for(let i=0;i<n;i++) arr.push({name,id:(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random())});
+   if(parts){name=parts[1].trim();n=Math.max(1,Math.min(100,parseInt(parts[2],10)))}
+   if(name) for(let i=0;i<n && arr.length<300;i++) arr.push({name:name.slice(0,32),id:(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random())});
  }
- document.getElementById("count").textContent=arr.length;
+ document.getElementById("count").textContent=arr.length+" / 300";
  return arr;
 }
 function applyNames(){
@@ -460,6 +460,7 @@ function startGame(){
  clearInterval(countdownTimer);countdownTimer=null;
  let people=parseNames();
  if(!people.length){alert("참가자를 먼저 입력해주세요.");return}
+ if(running){return}
  FINISH_Y=getFinishForMap();
  randomState=Number(document.getElementById("raceSeed")?.value)||1;simulationAccumulator=0;
  balls=people.map((p,i)=>makeBall(p,i,people.length));
