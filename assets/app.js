@@ -498,6 +498,12 @@ function showResult(){
    div.innerHTML=`<span class="rankNum">${i+1}</span><span class="rankName"></span><span class="rankState">${state}</span>`;
    div.querySelector(".rankName").textContent=b.name;rank.append(div);
  });
+ const raceBadges=[["first","🎱 첫 레이스"],["party","🎉 10구슬 대회"],["mega","🏟️ 50구슬 대회"],["speed","⚡ 15초 이내 결승"]];
+ let awards={};try{awards=JSON.parse(localStorage.getItem("fw_marble_awards_v1")||"{}")}catch{}
+ awards.first=true;if(startCount>=10)awards.party=true;if(startCount>=50)awards.mega=true;if(winner&&winner.time<=15)awards.speed=true;
+ try{localStorage.setItem("fw_marble_awards_v1",JSON.stringify(awards))}catch{}
+ let shelf=document.getElementById("marbleAwards");if(!shelf){shelf=document.createElement("p");shelf.id="marbleAwards";shelf.setAttribute("role","status");shelf.style.cssText="line-height:2;margin-top:12px;font-weight:700";document.getElementById("result").appendChild(shelf)}
+ shelf.textContent="🏅 레이스 업적: "+raceBadges.map(([id,label])=>label+(awards[id]?" ✅":" 🔒")).join(" · ");
  document.getElementById("result").classList.add("show");draw();
 }
 function hitsMagma(b,o){
