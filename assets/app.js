@@ -768,11 +768,11 @@ customMaps[name]={walls:cloneMap(editorWalls),finishY:FINISH_Y};saveMapsToStorag
 function openSaved(){
  let box=document.getElementById("savedList");box.innerHTML="";
  let keys=Object.keys(customMaps);
- if(!keys.length)box.innerHTML="<div style='color:#777'>저장된 맵이 없습니다.</div>";
+ if(!keys.length)box.innerHTML="<div style='color:#626773'>저장된 맵이 없습니다.</div>";
  keys.forEach(k=>{
   let div=document.createElement("div");div.className="savedItem";
   const saved=customMaps[k]||{}; const obstacleCount=(saved.walls||saved).length||0;
-  div.innerHTML=`<span><b>${escapeHtml(k)}</b><small style="display:block;color:#888;margin-top:2px">장애물 ${obstacleCount}개 · 결승선 ${Math.round(saved.finishY||FINISH_Y)}px</small></span>`;
+  div.innerHTML=`<span><b>${escapeHtml(k)}</b><small style="display:block;color:#626773;margin-top:2px">장애물 ${obstacleCount}개 · 결승선 ${Math.round(saved.finishY||FINISH_Y)}px</small></span>`;
   let row=document.createElement("span");
   let use=document.createElement("button");use.textContent="사용";use.onclick=()=>{currentMap="custom:"+k;FINISH_Y=getFinishForMap();document.getElementById("mapName").textContent=k;closeSaved();draw();updateMapPreview(currentMapData(),FINISH_Y,k)};
   let edit=document.createElement("button");edit.textContent="수정";edit.onclick=()=>{editCustomMap(k)};
