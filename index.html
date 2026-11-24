@@ -14,7 +14,7 @@
 <link rel="stylesheet" href="assets/formwheel-brand.css?v=20261008-hub-logo">
 <link rel="icon" type="image/svg+xml" href="https://semicolonxss.github.io/Formwheel/assets/formwheel-favicon.svg">
 </head>
-<body><div id="fw-battle-entry" style="position:relative;z-index:999;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px;padding:12px;background:#eef2ff;border:2px solid #a4b3ed;border-radius:14px;font-family:system-ui,sans-serif"><b style="color:#25376e">🎮 게임 모드</b><span style="padding:10px;color:#25376e">👤 일반</span><a href="./battle.html" style="display:inline-block;padding:11px 16px;border-radius:10px;background:#445bcc;color:#fff;text-decoration:none;font-weight:800">⚔️ 배틀 모드 →</a></div>
+<body><div role="navigation" aria-label="게임 모드" id="fw-battle-entry" style="position:relative;z-index:999;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px;padding:12px;background:#eef2ff;border:2px solid #a4b3ed;border-radius:14px;font-family:system-ui,sans-serif"><b style="color:#25376e">🎮 게임 모드</b><span style="padding:10px;color:#25376e">👤 일반</span><a href="./battle.html" style="display:inline-block;padding:11px 16px;border-radius:10px;background:#445bcc;color:#fff;text-decoration:none;font-weight:800">⚔️ 배틀 모드 →</a></div>
 <header>
 <a class="logo fw-hub-logo" href="https://semicolonxss.github.io/Formwheel/" aria-label="FormWheel 메인으로 이동"><span class="fw-hub-form">Form</span><span class="fw-hub-icon" aria-hidden="true"></span><span class="fw-hub-wheel">Wheel</span></a>
 </header>
@@ -29,7 +29,7 @@
 <section>
 <div class="card">
 <h2>참가자</h2>
-<textarea id="names" placeholder="[기생충-3], [전랑], [어벤져스-5]"></textarea>
+<textarea id="names" placeholder="[기생충-3], [전랑], [어벤져스-5]" aria-label="구슬 참가자 이름"></textarea>
 <div class="help">대괄호로 구분하세요. <b>[이름-숫자]</b>는 해당 구슬을 숫자만큼 생성하고, 숫자가 없으면 1개입니다.</div>
 <div class="row" style="margin-top:12px">
 <button class="primary" onclick="applyNames()">입력</button>
@@ -71,7 +71,7 @@
 <button class="smallBtn" onclick="quickSaveCurrentMap()">💾 현재 맵 저장</button>
 </div>
 <div id="shareBox" class="shareBox">
-<input id="shareUrl" readonly>
+<input id="shareUrl" readonly aria-label="공유 주소">
 <div class="row" style="margin-top:7px">
 <button class="smallBtn" onclick="copyShareUrl()">링크 복사</button>
 <button class="smallBtn" onclick="toggleShareQr()">▣ QR 보기</button>
@@ -148,7 +148,7 @@
 <canvas id="editor" width="760" height="2200"></canvas>
 <div class="finishRow">
 <span>결승선 위치</span>
-<input id="finishRange" type="range" min="100" max="2190" value="2150" oninput="setFinishY(this.value)">
+<input id="finishRange" type="range" min="100" max="2190" value="2150" oninput="setFinishY(this.value)" aria-label="결승선 위치">
 </div>
 <div class="finishBtns">
 <button onclick="moveFinish(-20)">▲ 위로</button>
@@ -162,7 +162,7 @@
 <button class="danger" onclick="deleteSel()">선택 삭제</button>
 </div>
 <div class="row" style="margin-top:12px">
-<input id="mapTitle" placeholder="맵 이름" style="flex:1;min-width:180px">
+<input id="mapTitle" placeholder="맵 이름" style="flex:1;min-width:180px" aria-label="맵 제목">
 <button class="primary" onclick="saveCustomMap()">저장</button>
 <button onclick="editorToSyntax()">문법 보기</button>
 <button onclick="closeEditor()">닫기</button>
@@ -174,7 +174,7 @@
 <div class="modalBox">
 <h2>⌨️ 커스텀 맵 문법</h2>
 <p class="editorHint">예: <code>[wall,180,300,120,16]</code>. 잘못된 줄은 저장/적용되지 않습니다.</p>
-<textarea id="syntaxInput" style="width:100%;min-height:270px;border:1px solid #dfe2e8;border-radius:14px;padding:13px;resize:vertical;outline:none;font-size:13px;line-height:1.65"></textarea>
+<textarea id="syntaxInput" style="width:100%;min-height:270px;border:1px solid #dfe2e8;border-radius:14px;padding:13px;resize:vertical;outline:none;font-size:13px;line-height:1.65" aria-label="맵 구성 코드"></textarea>
 <div id="syntaxModalError" class="errorBox"></div>
 <div class="row" style="margin-top:12px">
 <button class="primary" onclick="applySyntaxMap()">미리보기 적용</button>
